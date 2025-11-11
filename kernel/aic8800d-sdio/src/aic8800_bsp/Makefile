@@ -1,7 +1,6 @@
 CONFIG_SDIO_SUPPORT := y
 CONFIG_SDIO_PWRCTRL := n
-CONFIG_AIC_FW_PATH = "/vendor/etc/firmware"
-#CONFIG_AIC_FW_PATH = "/lib/firmware/aic8800D80"
+CONFIG_AIC_FW_PATH ?= "/vendor/etc/firmware"
 export CONFIG_AIC_FW_PATH
 ccflags-y += -DCONFIG_AIC_FW_PATH=\"$(CONFIG_AIC_FW_PATH)\"
 
@@ -153,4 +152,3 @@ uninstall:
 
 clean:
 	rm -rf *.o *.ko *.o.* *.mod.* modules.* Module.* .a* .o* .*.o.* *.mod .tmp* .cache.mk built-in.a
-

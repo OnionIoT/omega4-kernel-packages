@@ -43,7 +43,8 @@ KERNEL_MAKE_FLAGS += \
 	CONFIG_USE_FW_REQUEST=y \
 	CONFIG_PREALLOC_RX_SKB=y \
 	CONFIG_PREALLOC_TXQ=y \
-	CONFIG_FILTER_TCP_ACK=y
+	CONFIG_FILTER_TCP_ACK=y \
+	CONFIG_AIC_FW_PATH="/lib/firmware/aic8800_sdio"
 
 # ---------------------------------------------------------------------
 # PREPARE: copy their tree and (lightly) relax -Werror in the worst dirs
@@ -57,22 +58,26 @@ define Build/Prepare
 	# vendor makefiles are left untouched so build issues surface during compile
 endef
 
-# ---------------------------------------------------------------------
-# COMPILE: build THROUGH the kernel and force KCFLAGS to win over any -Werror
-# ---------------------------------------------------------------------
+# Tell Kbuild where to find backports/mac80211 headers
+# and force-include the backport shim headers
+NOSTDINC_FLAGS += \
+  -I$(STAGING_DIR)/usr/include/mac80211-backport/uapi \
+  -I$(STAGING_DIR)/usr/include/mac80211-backport \
+  -I$(STAGING_DIR)/usr/include/mac80211/uapi \
+  -I$(STAGING_DIR)/usr/include/mac80211 \
+  -include backport/autoconf.h \
+  -include backport/backport.h
+
 define Build/Compile
 	+$(KERNEL_MAKE) \
 		M="$(PKG_BUILD_DIR)" \
 		EXTRA_CFLAGS="$(NOSTDINC_FLAGS)" \
-		KCFLAGS=" \
-		" \
 		$(KERNEL_MAKE_FLAGS) \
 		modules
 endef
 
 # ---------------------------------------------------------------------
 # If the driver changes its .ko names, this install rule will still grab them.
-# If you’re happy with the FILES:= above, you can drop this section.
 # ---------------------------------------------------------------------
 define KernelPackage/aic8800d-sdio/install
 	$(INSTALL_DIR) $(1)/lib/modules/$(LINUX_VERSION)

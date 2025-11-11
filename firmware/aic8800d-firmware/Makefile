@@ -22,7 +22,7 @@ endef
 
 define Package/aic8800d-firmware/install
 	$(INSTALL_DIR) $(1)/lib/firmware/
-	$(CP) ./files/lib/firmware/aic8800d/aic8800D80/. $(1)/lib/firmware/aic8800d
+	$(CP) ./files/lib/firmware/aic8800D80/. $(1)/lib/firmware/aic8800_sdio
 endef
 
 $(eval $(call BuildPackage,aic8800d-firmware))
