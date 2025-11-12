@@ -68,7 +68,8 @@ CONFIG_RWNX_BFMER ?= n
 CONFIG_SDIO_SUPPORT =y
 CONFIG_USB_SUPPORT =n
 CONFIG_RX_REORDER ?=y
-CONFIG_ARP_OFFLOAD =y
+# ARP offload currently drops ARP exchanges in STA mode, keep it disabled
+CONFIG_ARP_OFFLOAD =n
 CONFIG_RADAR_OR_IR_DETECT =n
 CONFIG_DOWNLOAD_FW =n
 CONFIG_RFTEST=y
@@ -424,5 +425,4 @@ uninstall:
 
 clean:
 	rm -rf *.o *.ko *.o.* *.mod.* modules.* Module.* .a* .o* .*.o.* *.mod .tmp* .cache.mk
-
 
