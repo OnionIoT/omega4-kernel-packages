@@ -72,7 +72,7 @@ int rwnx_send_get_macaddr_req(struct rwnx_hw *rwnx_hw, struct mm_get_mac_addr_cf
 
 #ifdef CONFIG_RWNX_FULLMAC
 int rwnx_send_me_config_req(struct rwnx_hw *rwnx_hw);
-int rwnx_send_me_chan_config_req(struct rwnx_hw *rwnx_hw, char *ccode);
+int rwnx_send_me_chan_config_req(struct rwnx_hw *rwnx_hw, const char *ccode);
 int rwnx_send_me_set_control_port_req(struct rwnx_hw *rwnx_hw, bool opened,
 									  u8 sta_idx);
 int rwnx_send_me_sta_add(struct rwnx_hw *rwnx_hw, struct station_parameters *params,

@@ -2687,7 +2687,7 @@ int rwnx_send_me_config_req(struct rwnx_hw *rwnx_hw)
 	return rwnx_send_msg(rwnx_hw, req, 1, ME_CONFIG_CFM, NULL);
 }
 
-int rwnx_send_me_chan_config_req(struct rwnx_hw *rwnx_hw, char *ccode)
+int rwnx_send_me_chan_config_req(struct rwnx_hw *rwnx_hw, const char *ccode)
 {
 	struct me_chan_config_req *req;
 	struct wiphy *wiphy = rwnx_hw->wiphy;

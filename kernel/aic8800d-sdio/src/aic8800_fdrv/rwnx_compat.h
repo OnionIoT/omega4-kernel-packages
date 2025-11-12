@@ -268,6 +268,20 @@ enum ieee80211_radiotap_he_mu_bits {
 #define REGULATORY_IGNORE_STALE_KICKOFF 0
 #endif
 
+
+/*
+ * When building against backported cfg80211/mac80211 trees the kernel headers
+ * reflect the running kernel while the cfg80211 APIs track the backport
+ * version.  Override LINUX_VERSION_CODE with CFG80211_VERSION_CODE when it is
+ * provided so every version check in the driver matches the wireless stack
+ * we are targeting instead of the host kernel.
+ */
+#if defined(CFG80211_VERSION_CODE) && CFG80211_VERSION_CODE > 0
+#undef LINUX_VERSION_CODE
+#define LINUX_VERSION_CODE CFG80211_VERSION_CODE
+#endif
+
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 18, 0)) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
 #define cfg80211_rx_mgmt(wdev, freq, rssi, buf, len, flags)             \
 	cfg80211_rx_mgmt(wdev, freq, rssi, buf, len, flags, GFP_ATOMIC)

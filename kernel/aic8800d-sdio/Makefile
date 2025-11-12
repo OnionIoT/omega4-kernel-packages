@@ -5,6 +5,8 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=aic8800d-sdio
 PKG_RELEASE:=1
 
+STAMP_CONFIGURED_DEPENDS := $(STAGING_DIR)/usr/include/mac80211-backport/backport/autoconf.h
+
 include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/package.mk
 
@@ -28,10 +30,27 @@ define KernelPackage/aic8800d-sdio/description
 endef
 
 # vendor headers live inside the src/ tree
-NOSTDINC_FLAGS += \
+NOSTDINC_FLAGS := \
+	$(KERNEL_NOSTDINC_FLAGS) \
 	-I$(PKG_BUILD_DIR)/aic8800_fdrv \
 	-I$(PKG_BUILD_DIR)/aic8800_bsp \
 	-I$(PKG_BUILD_DIR)/aic8800_btlpm
+
+MAC80211_MAKEFILE:=$(TOPDIR)/package/kernel/mac80211/Makefile
+ifneq ($(wildcard $(MAC80211_MAKEFILE)),)
+  MAC80211_BACKPORT_VERSION:=$(strip $(shell sed -n 's/^PKG_VERSION:=//p' $(MAC80211_MAKEFILE)))
+  ifneq ($(MAC80211_BACKPORT_VERSION),)
+    MAC80211_BACKPORT_VER_MAJ:=$(word 1,$(subst ., ,$(MAC80211_BACKPORT_VERSION)))
+    MAC80211_BACKPORT_VER_MIN:=$(word 2,$(subst ., ,$(MAC80211_BACKPORT_VERSION)))
+    MAC80211_BACKPORT_VER_PAT:=$(word 3,$(subst ., ,$(MAC80211_BACKPORT_VERSION)))
+    MAC80211_BACKPORT_VER_MAJ:=$(if $(MAC80211_BACKPORT_VER_MAJ),$(MAC80211_BACKPORT_VER_MAJ),0)
+    MAC80211_BACKPORT_VER_MIN:=$(if $(MAC80211_BACKPORT_VER_MIN),$(MAC80211_BACKPORT_VER_MIN),0)
+    MAC80211_BACKPORT_VER_PAT:=$(if $(MAC80211_BACKPORT_VER_PAT),$(MAC80211_BACKPORT_VER_PAT),0)
+    MAC80211_BACKPORT_VER_CODE:=$(shell printf '0x%02x%02x%02x' $(MAC80211_BACKPORT_VER_MAJ) $(MAC80211_BACKPORT_VER_MIN) $(MAC80211_BACKPORT_VER_PAT))
+    NOSTDINC_FLAGS += \
+      -DCFG80211_VERSION_CODE=$(MAC80211_BACKPORT_VER_CODE)
+  endif
+endif
 
 # vendor Kconfig-y toggles that their Makefiles expect
 KERNEL_MAKE_FLAGS += \
@@ -43,19 +62,14 @@ KERNEL_MAKE_FLAGS += \
 	CONFIG_USE_FW_REQUEST=y \
 	CONFIG_PREALLOC_RX_SKB=y \
 	CONFIG_PREALLOC_TXQ=y \
-	CONFIG_FILTER_TCP_ACK=y \
-	CONFIG_AIC_FW_PATH="/lib/firmware/aic8800_sdio"
+	CONFIG_FILTER_TCP_ACK=y
 
 # ---------------------------------------------------------------------
 # PREPARE: copy their tree and (lightly) relax -Werror in the worst dirs
 # ---------------------------------------------------------------------
 define Build/Prepare
 	$(call Build/Prepare/Default)
-
-	# 1) copy vendor sources from this package into the kernel build dir
 	$(CP) ./src/. $(PKG_BUILD_DIR)/
-
-	# vendor makefiles are left untouched so build issues surface during compile
 endef
 
 # Tell Kbuild where to find backports/mac80211 headers
@@ -68,10 +82,15 @@ NOSTDINC_FLAGS += \
   -include backport/autoconf.h \
   -include backport/backport.h
 
+# Disable treating warnings as errors
+NOSTDINC_FLAGS += \
+	-Wno-error
+
+
 define Build/Compile
 	+$(KERNEL_MAKE) \
 		M="$(PKG_BUILD_DIR)" \
-		EXTRA_CFLAGS="$(NOSTDINC_FLAGS)" \
+		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
 		$(KERNEL_MAKE_FLAGS) \
 		modules
 endef
