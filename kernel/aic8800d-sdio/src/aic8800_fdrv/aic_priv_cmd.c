@@ -1714,7 +1714,8 @@ void set_vendor_extension_ie(char *command){
 }
 #endif//CONFIG_SET_VENDOR_EXTENSION_IE
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef);
+				       struct net_device *dev,
+				       struct cfg80211_chan_def *chandef);
 int rwnx_atoi2(char *value, int c_len);
 void set_mon_chan(struct rwnx_vif *vif, char *parameter){
     struct cfg80211_chan_def *chandef = NULL;
@@ -1738,7 +1739,7 @@ void set_mon_chan(struct rwnx_vif *vif, char *parameter){
     chandef->center_freq1 = chandef->chan->center_freq;
     chandef->center_freq2 = 0;
 
-    rwnx_cfg80211_set_monitor_channel_(vif->rwnx_hw->wiphy, chandef);
+    rwnx_cfg80211_set_monitor_channel_(vif->rwnx_hw->wiphy, vif->ndev, chandef);
 
     vfree(chandef->chan);
     vfree(chandef);
@@ -2152,4 +2153,3 @@ exit:
 	Sreturn ret;
 }
 #endif
-

@@ -3562,17 +3562,22 @@ static int rwnx_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *dev)
  * configured at firmware level.
  */
 static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
-											 struct cfg80211_chan_def *chandef)
+                                             struct net_device *dev,
+                                             struct cfg80211_chan_def *chandef)
 {
 	struct rwnx_hw *rwnx_hw = wiphy_priv(wiphy);
-	struct rwnx_vif *rwnx_vif;
+	struct rwnx_vif *rwnx_vif = NULL;
 	struct me_config_monitor_cfm cfm;
 	RWNX_DBG(RWNX_FN_ENTRY_STR);
 
-	if (rwnx_hw->monitor_vif == RWNX_INVALID_VIF)
-		return -EINVAL;
+	if (dev)
+		rwnx_vif = netdev_priv(dev);
 
-	rwnx_vif = rwnx_hw->vif_table[rwnx_hw->monitor_vif];
+	if (!rwnx_vif) {
+		if (rwnx_hw->monitor_vif == RWNX_INVALID_VIF)
+			return -EINVAL;
+		rwnx_vif = rwnx_hw->vif_table[rwnx_hw->monitor_vif];
+	}
 
 	// Do nothing if monitor interface is already configured with the requested channel
 	if (rwnx_chanctx_valid(rwnx_hw, rwnx_vif->ch_index)) {
@@ -3615,8 +3620,10 @@ static int rwnx_cfg80211_set_monitor_channel(struct wiphy *wiphy,
 }
 
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-                                             struct cfg80211_chan_def *chandef){
-    return rwnx_cfg80211_set_monitor_channel(wiphy, chandef);
+				       struct net_device *dev,
+				       struct cfg80211_chan_def *chandef)
+{
+	return rwnx_cfg80211_set_monitor_channel(wiphy, dev, chandef);
 }
 
 
@@ -4035,7 +4042,7 @@ static int rwnx_cfg80211_get_channel(struct wiphy *wiphy,
 
 	if (rwnx_vif->vif_index == rwnx_hw->monitor_vif) {
 		//retrieve channel from firmware
-		rwnx_cfg80211_set_monitor_channel(wiphy, NULL);
+		rwnx_cfg80211_set_monitor_channel(wiphy, rwnx_vif->ndev, NULL);
 	}
 
 	//Check if channel context is valid
@@ -6304,4 +6311,3 @@ MODULE_DESCRIPTION(RW_DRV_DESCRIPTION);
 MODULE_VERSION(RWNX_VERS_MOD);
 MODULE_AUTHOR(RW_DRV_COPYRIGHT " " RW_DRV_AUTHOR);
 MODULE_LICENSE("GPL");
-
