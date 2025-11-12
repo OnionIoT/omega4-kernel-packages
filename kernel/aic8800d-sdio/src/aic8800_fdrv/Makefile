@@ -73,8 +73,8 @@ CONFIG_ARP_OFFLOAD =n
 CONFIG_RADAR_OR_IR_DETECT =n
 CONFIG_DOWNLOAD_FW =n
 CONFIG_RFTEST=y
-CONFIG_USB_BT =y
-CONFIG_SDIO_BT=n
+CONFIG_USB_BT =n
+CONFIG_SDIO_BT=y
 CONFIG_USE_5G ?= y
 CONFIG_CREATE_TRACE_POINTS = n
 CONFIG_TXRX_THREAD_PRIO = y
@@ -425,4 +425,3 @@ uninstall:
 
 clean:
 	rm -rf *.o *.ko *.o.* *.mod.* modules.* Module.* .a* .o* .*.o.* *.mod .tmp* .cache.mk
-

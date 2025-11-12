@@ -254,7 +254,9 @@ int btsdio_init(void)
 	hdev->bus = HCI_SDIO;
 	hci_set_drvdata(hdev, data);
 
+#ifdef HCI_PRIMARY
 	hdev->dev_type = HCI_PRIMARY;
+#endif
 
 	data->hdev = hdev;
 
