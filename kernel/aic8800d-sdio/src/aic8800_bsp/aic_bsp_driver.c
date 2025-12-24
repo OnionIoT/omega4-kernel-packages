@@ -2119,12 +2119,13 @@ int aicbsp_driver_fw_init(struct aic_sdio_dev *sdiodev)
 
 int aicbsp_get_feature(struct aicbsp_feature_t *feature, char *fw_path)
 {
+	/* Force SDIO to 50 MHz (SDIO 2.0 rate) on all supported chip IDs. */
 	if (aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8801 ||
         aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800DC ||
-        aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800DW){
+        aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800DW ||
+        aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+        aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
 	    feature->sdio_clock = FEATURE_SDIO_CLOCK;
-	}else if (aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800D80 || aicbsp_sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
-        feature->sdio_clock = FEATURE_SDIO_CLOCK_V3;
 	}
 	feature->sdio_phase = FEATURE_SDIO_PHASE;
 	feature->hwinfo     = aicbsp_info.hwinfo;
