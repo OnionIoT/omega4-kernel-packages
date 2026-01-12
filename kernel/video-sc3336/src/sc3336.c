@@ -187,6 +187,12 @@ static const struct regval sc3336_linear_10_2304x1296_25fps_regs[] = {
 	{0x37f9, 0x80},
 	{0x301f, 0x01},
 	{0x30b8, 0x33},
+	{0x3208, 0x09},
+	{0x3209, 0x00},
+	{0x320a, 0x05},
+	{0x320b, 0x10},
+	{0x320c, 0x09},
+	{0x320d, 0xc4},
 	{0x320e, 0x06},
 	{0x320f, 0x54},
 	{0x3253, 0x10},
@@ -326,6 +332,12 @@ static const struct regval sc3336_linear_10_2304x1296_30fps_regs[] = {
 	{0x37f9, 0x80},
 	{0x301f, 0x02},
 	{0x30b8, 0x33},
+	{0x3208, 0x09},
+	{0x3209, 0x00},
+	{0x320a, 0x05},
+	{0x320b, 0x10},
+	{0x320c, 0x09},
+	{0x320d, 0xc4},
 	{0x320e, 0x05},
 	{0x320f, 0x3c},
 	{0x3253, 0x10},
@@ -750,9 +762,9 @@ static int sc3336_get_fmt(struct v4l2_subdev *sd,
 
 	mutex_lock(&sc3336->mutex);
 	if (!mode) {
-		dev_err(dev, "get_fmt with no current mode\n");
-		mutex_unlock(&sc3336->mutex);
-		return -EINVAL;
+		dev_warn_once(dev, "get_fmt with no current mode, using default\n");
+		mode = &supported_modes[0];
+		sc3336->cur_mode = mode;
 	}
 	dev_dbg(dev, "get_fmt which=%u pad=%u mode=%ux%u code=0x%x\n",
 		fmt->which, fmt->pad, mode->width, mode->height, mode->bus_fmt);

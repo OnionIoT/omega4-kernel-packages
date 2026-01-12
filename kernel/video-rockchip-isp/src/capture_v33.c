@@ -552,6 +552,58 @@ disable:
 
 /***************************** stream operations*******************************/
 
+static void rkisp_mi_calc_plane_sizes(struct rkisp_stream *stream, u32 height,
+				      bool use_total, u32 *cb_size, u32 *cr_size)
+{
+	const struct capture_fmt *fmt = &stream->out_isp_fmt;
+	struct v4l2_pix_format_mplane *out_fmt = &stream->out_fmt;
+	u32 cb = out_fmt->plane_fmt[1].sizeimage;
+	u32 cr = out_fmt->plane_fmt[2].sizeimage;
+
+	if (fmt->mplanes == 1 && fmt->cplanes > 1) {
+		u32 y_size = out_fmt->plane_fmt[0].bytesperline * height;
+
+		if (use_total) {
+			u32 total = out_fmt->plane_fmt[0].sizeimage;
+
+			if (total > y_size) {
+				u32 chroma_total = total - y_size;
+
+				if (fmt->cplanes == 3) {
+					cb = chroma_total / 2;
+					cr = chroma_total / 2;
+				} else {
+					cb = chroma_total;
+					cr = 0;
+				}
+
+				*cb_size = cb;
+				*cr_size = cr;
+				return;
+			}
+		}
+
+		{
+			u32 xsubs = 1;
+			u32 ysubs = 1;
+
+			if (!rkisp_fcc_xysubs(fmt->fourcc, &xsubs, &ysubs)) {
+				u32 chroma_height = height / ysubs;
+
+				cb = out_fmt->plane_fmt[1].bytesperline * chroma_height;
+				if (fmt->cplanes == 3)
+					cr = out_fmt->plane_fmt[2].bytesperline *
+					     chroma_height;
+				else
+					cr = 0;
+			}
+		}
+	}
+
+	*cb_size = cb;
+	*cr_size = cr;
+}
+
 /*
  * memory base addresses should be with respect
  * to the burst alignment restriction for AXI.
@@ -627,7 +679,10 @@ static int mp_config_mi(struct rkisp_stream *stream)
 	struct rkisp_device *dev = stream->ispdev;
 	struct capture_fmt *fmt = &stream->out_isp_fmt;
 	struct v4l2_pix_format_mplane *out_fmt = &stream->out_fmt;
+	bool is_unite = !!dev->hw_dev->unite;
 	u32 val, mask, height = out_fmt->height;
+	u32 cb_size = out_fmt->plane_fmt[1].sizeimage;
+	u32 cr_size = out_fmt->plane_fmt[2].sizeimage;
 
        /*
 	* NOTE: plane_fmt[0].sizeimage is total size of all planes for single
@@ -642,18 +697,17 @@ static int mp_config_mi(struct rkisp_stream *stream)
 	rkisp_unite_write(dev, ISP3X_MI_MP_WR_Y_LLENGTH, val, false);
 	val *= height;
 	rkisp_unite_write(dev, stream->config->mi.y_pic_size, val, false);
+	val = is_unite ? out_fmt->width / 2 : out_fmt->width;
+	rkisp_unite_write(dev, ISP3X_MI_MP_WR_Y_PIC_WIDTH, val, false);
+	val = height;
+	rkisp_unite_write(dev, ISP3X_MI_MP_WR_Y_PIC_HEIGHT, val, false);
 	val = out_fmt->plane_fmt[0].bytesperline * height;
 	rkisp_unite_write(dev, stream->config->mi.y_size_init, val, false);
 
-	val = out_fmt->plane_fmt[1].sizeimage;
-	if (dev->cap_dev.wrap_line)
-		val = out_fmt->plane_fmt[0].bytesperline * height / 2;
-	rkisp_unite_write(dev, stream->config->mi.cb_size_init, val, false);
-
-	val = out_fmt->plane_fmt[2].sizeimage;
-	if (dev->cap_dev.wrap_line)
-		val = out_fmt->plane_fmt[0].bytesperline * height / 2;
-	rkisp_unite_write(dev, stream->config->mi.cr_size_init, val, false);
+	rkisp_mi_calc_plane_sizes(stream, height, !dev->cap_dev.wrap_line,
+				  &cb_size, &cr_size);
+	rkisp_unite_write(dev, stream->config->mi.cb_size_init, cb_size, false);
+	rkisp_unite_write(dev, stream->config->mi.cr_size_init, cr_size, false);
 
 	val = stream->out_isp_fmt.uv_swap ? ISP3X_MI_XTD_FORMAT_MP_UV_SWAP : 0;
 	mask = ISP3X_MI_XTD_FORMAT_MP_UV_SWAP;
@@ -724,7 +778,10 @@ static int sp_config_mi(struct rkisp_stream *stream)
 	struct capture_fmt *fmt = &stream->out_isp_fmt;
 	struct ispsd_out_fmt *input_isp_fmt =
 			rkisp_get_ispsd_out_fmt(&dev->isp_sdev);
+	bool is_unite = !!dev->hw_dev->unite;
 	u32 sp_in_fmt, val, mask;
+	u32 cb_size = out_fmt->plane_fmt[1].sizeimage;
+	u32 cr_size = out_fmt->plane_fmt[2].sizeimage;
 
 	if (mbus_code_sp_in_fmt(input_isp_fmt->mbus_code,
 				out_fmt->pixelformat, &sp_in_fmt)) {
@@ -741,14 +798,16 @@ static int sp_config_mi(struct rkisp_stream *stream)
 	rkisp_unite_write(dev, ISP3X_MI_SP_WR_Y_LLENGTH, val, false);
 	val *= out_fmt->height;
 	rkisp_unite_write(dev, stream->config->mi.y_pic_size, val, false);
+	val = is_unite ? out_fmt->width / 2 : out_fmt->width;
+	rkisp_unite_write(dev, ISP3X_MI_SP_WR_Y_PIC_WIDTH, val, false);
+	val = out_fmt->height;
+	rkisp_unite_write(dev, ISP3X_MI_SP_WR_Y_PIC_HEIGHT, val, false);
 	val = out_fmt->plane_fmt[0].bytesperline * out_fmt->height;
 	rkisp_unite_write(dev, stream->config->mi.y_size_init, val, false);
 
-	val = out_fmt->plane_fmt[1].sizeimage;
-	rkisp_unite_write(dev, stream->config->mi.cb_size_init, val, false);
-
-	val = out_fmt->plane_fmt[2].sizeimage;
-	rkisp_unite_write(dev, stream->config->mi.cr_size_init, val, false);
+	rkisp_mi_calc_plane_sizes(stream, out_fmt->height, true, &cb_size, &cr_size);
+	rkisp_unite_write(dev, stream->config->mi.cb_size_init, cb_size, false);
+	rkisp_unite_write(dev, stream->config->mi.cr_size_init, cr_size, false);
 
 	val = stream->out_isp_fmt.uv_swap ? ISP3X_MI_XTD_FORMAT_SP_UV_SWAP : 0;
 	mask = ISP3X_MI_XTD_FORMAT_SP_UV_SWAP;
@@ -788,7 +847,10 @@ static int bp_config_mi(struct rkisp_stream *stream)
 	struct v4l2_pix_format_mplane *out_fmt = &stream->out_fmt;
 	struct capture_fmt *fmt = &stream->out_isp_fmt;
 	struct rkisp_device *dev = stream->ispdev;
+	bool is_unite = !!dev->hw_dev->unite;
 	u32 val, mask;
+	u32 cb_size = out_fmt->plane_fmt[1].sizeimage;
+	u32 cr_size = out_fmt->plane_fmt[2].sizeimage;
 
        /*
 	* NOTE: plane_fmt[0].sizeimage is total size of all planes for single
@@ -799,11 +861,15 @@ static int bp_config_mi(struct rkisp_stream *stream)
 	rkisp_unite_write(dev, ISP3X_MI_BP_WR_Y_LLENGTH, val, false);
 	val *= out_fmt->height;
 	rkisp_unite_write(dev, stream->config->mi.y_pic_size, val, false);
+	val = is_unite ? out_fmt->width / 2 : out_fmt->width;
+	rkisp_unite_write(dev, ISP3X_MI_BP_WR_Y_PIC_WIDTH, val, false);
+	val = out_fmt->height;
+	rkisp_unite_write(dev, ISP3X_MI_BP_WR_Y_PIC_HEIGHT, val, false);
 	val = out_fmt->plane_fmt[0].bytesperline * out_fmt->height;
 	rkisp_unite_write(dev, stream->config->mi.y_size_init, val, false);
 
-	val = out_fmt->plane_fmt[1].sizeimage;
-	rkisp_unite_write(dev, stream->config->mi.cb_size_init, val, false);
+	rkisp_mi_calc_plane_sizes(stream, out_fmt->height, true, &cb_size, &cr_size);
+	rkisp_unite_write(dev, stream->config->mi.cb_size_init, cb_size, false);
 
 	mask = ISP3X_MPFBC_FORCE_UPD | ISP3X_BP_YUV_MODE;
 	val = rkisp_read_reg_cache(dev, ISP3X_MPFBC_CTRL) & ~mask;

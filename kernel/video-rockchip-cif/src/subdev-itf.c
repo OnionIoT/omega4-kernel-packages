@@ -172,6 +172,7 @@ static int sditf_get_set_fmt(struct v4l2_subdev *sd,
 	struct v4l2_subdev_selection input_sel;
 	struct v4l2_pix_format_mplane pixm;
 	const struct cif_output_fmt *out_fmt;
+	struct rkmodule_channel_info ch_info = {0};
 	int ret = -EINVAL;
 	bool is_uncompact = false;
 
@@ -184,9 +185,24 @@ static int sditf_get_set_fmt(struct v4l2_subdev *sd,
 		fmt->pad = 0;
 		ret = v4l2_subdev_call(cif_dev->terminal_sensor.sd, pad, get_fmt, NULL, fmt);
 		if (ret) {
-			v4l2_err(&priv->sd,
-				 "%s: get sensor format failed\n", __func__);
-			return ret;
+			v4l2_warn(&priv->sd,
+				  "%s: get sensor format failed, trying channel info\n",
+				  __func__);
+			ch_info.index = 0;
+			ret = v4l2_subdev_call(cif_dev->terminal_sensor.sd,
+					       core, ioctl,
+					       RKMODULE_GET_CHANNEL_INFO,
+					       &ch_info);
+			if (ret) {
+				v4l2_err(&priv->sd,
+					 "%s: get channel info failed\n",
+					 __func__);
+				return ret;
+			}
+			fmt->format.width = ch_info.width;
+			fmt->format.height = ch_info.height;
+			fmt->format.code = ch_info.bus_fmt;
+			fmt->format.field = V4L2_FIELD_NONE;
 		}
 
 		input_sel.target = V4L2_SEL_TGT_CROP_BOUNDS;
