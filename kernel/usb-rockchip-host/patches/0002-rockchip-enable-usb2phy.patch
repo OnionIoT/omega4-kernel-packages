@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Omega4 Bring-up <devnull@onion.io>
+Date: Tue, 14 Jan 2025 12:00:00 +0000
+Subject: [PATCH] rockchip: enable usb2 phy driver
+
+---
+ target/linux/rockchip/cortexa7/config-6.6 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+--- a/target/linux/rockchip/cortexa7/config-6.6
++++ b/target/linux/rockchip/cortexa7/config-6.6
+@@ -608,7 +608,7 @@
+ # CONFIG_PHY_ROCKCHIP_INNO_CSIDPHY is not set
+ # CONFIG_PHY_ROCKCHIP_INNO_DSIDPHY is not set
+ # CONFIG_PHY_ROCKCHIP_INNO_HDMI is not set
+-# CONFIG_PHY_ROCKCHIP_INNO_USB2 is not set
++CONFIG_PHY_ROCKCHIP_INNO_USB2=y
+ # CONFIG_PHY_ROCKCHIP_INNO_USB3 is not set
+ # CONFIG_PHY_ROCKCHIP_MIPI_RX is not set
+ # CONFIG_PHY_ROCKCHIP_NANENG_COMBO_PHY is not set

@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Omega4 Bring-up <devnull@onion.io>
+Date: Tue, 14 Jan 2025 12:00:00 +0000
+Subject: [PATCH] rockchip: omega4-evb: enable usb2 phy and host mode
+
+---
+ target/linux/rockchip/dts/rv1103b-omega4-evb.dts | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+--- a/target/linux/rockchip/dts/rv1103b-omega4-evb.dts
++++ b/target/linux/rockchip/dts/rv1103b-omega4-evb.dts
+@@ -62,9 +62,23 @@
+ };
+ 
+ /**********USB**********/
++&u2phy {
++	status = "okay";
++};
++
++&u2phy_otg {
++	rockchip,vbus-always-on;
++	status = "okay";
++};
++
++&usbdrd {
++	status = "okay";
++};
++
+&usbdrd_dwc3 {
+	status = "okay";
+-	dr_mode = "peripheral";
++	dr_mode = "host";
++	/delete-property/ extcon;
+};
