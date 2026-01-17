@@ -16,7 +16,7 @@ PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
 define KernelPackage/aic8800d-sdio
   SUBMENU:=Wireless Drivers
   TITLE:=AIC8800D SDIO Wi-Fi support
-  DEPENDS:=+kmod-cfg80211 +kmod-mac80211 +kmod-mmc
+  DEPENDS:=+kmod-cfg80211 +kmod-mac80211 +kmod-mmc +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT
   # if you know the exact .ko names, keep this; otherwise use the generic install() below
   FILES:= \
 	$(PKG_BUILD_DIR)/aic8800_bsp/aic8800_bsp.ko \
