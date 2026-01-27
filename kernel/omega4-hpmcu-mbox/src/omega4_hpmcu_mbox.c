@@ -128,6 +128,19 @@ static int omega4_hpmcu_mbox_send(struct omega4_hpmcu_mbox *mb, u32 cmd, u32 dat
 				u32 cmd = readl_relaxed(mb->mbox_base + MBOX_V2_B2A_CMD);
 				u32 data = readl_relaxed(mb->mbox_base + MBOX_V2_B2A_DATA);
 
+				/*
+				 * Some firmware revisions update B2A CMD/DATA
+				 * without setting STATUS. Treat exact matches as a
+				 * valid response to avoid false timeouts.
+				 */
+				if (cmd == mb->msg.cmd && data == mb->msg.data) {
+					mb->last_cmd = cmd;
+					mb->last_data = data;
+					atomic_inc(&mb->rx_count);
+					ret = 0;
+					goto out;
+				}
+
 				dev_warn(mb->dev,
 					 "mbox timeout: a2b_status=0x%08x b2a_status=0x%08x b2a_cmd=0x%08x b2a_data=0x%08x\n",
 					 a2b, b2a, cmd, data);

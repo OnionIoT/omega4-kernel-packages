@@ -6,7 +6,11 @@ extern void clear_bss(void);
 
 #define OMEGA4_MBOX_BASE 0x20A10000u
 #define OMEGA4_MBOX_STATUS_BIT 0x1u
-#define OMEGA4_MBOX_INTEN_ENABLE 0x00010001u
+/*
+ * Keep cache maintenance disabled by default: early access to cache
+ * registers can trap if the HPMCU peripheral window isn't mapped yet.
+ */
+#define OMEGA4_USE_CACHE_MAINT 0
 #define OMEGA4_MBOX_PING_CMD 0x4f4d4355u /* "OMCU" */
 #define OMEGA4_MBOX_BOOT_CMD 0x424f4f54u /* "BOOT" */
 #define OMEGA4_CACHE_BASE 0x206A0000u
@@ -77,15 +81,24 @@ static void omega4_mbox_send(uint32_t cmd, uint32_t data)
 {
 	omega4_mbox->b2a_cmd = cmd;
 	omega4_mbox->b2a_data = data;
+	/* Mark response ready for AP side polling. */
+	omega4_mbox->b2a_status = OMEGA4_MBOX_STATUS_BIT;
 }
 
 static void omega4_cache_bypass(void)
 {
+#if OMEGA4_USE_CACHE_MAINT
 	omega4_cache->cache_ctrl |= OMEGA4_CACHE_BYPASS_BIT;
+#endif
 }
 
 static void omega4_dcache_clean(uint32_t addr, uint32_t size)
 {
+#if !OMEGA4_USE_CACHE_MAINT
+	(void)addr;
+	(void)size;
+	return;
+#else
 	uint32_t offset;
 	uint32_t value;
 
@@ -102,12 +115,17 @@ static void omega4_dcache_clean(uint32_t addr, uint32_t size)
 	while (omega4_cache->cache_status & OMEGA4_CACHE_STATUS_BUSY) {
 		;
 	}
+#endif
 }
 
 static void omega4_mbox_init(void)
 {
-	omega4_mbox->a2b_inten = OMEGA4_MBOX_INTEN_ENABLE;
-	omega4_mbox->b2a_inten = OMEGA4_MBOX_INTEN_ENABLE;
+	/*
+	 * Enable mailbox interrupts/status with writeable bit set.
+	 * Values mirror the AP-side driver expectations.
+	 */
+	omega4_mbox->a2b_inten = 0x01010101u;
+	omega4_mbox->b2a_inten = 0x01010101u;
 	omega4_mbox->a2b_status = OMEGA4_MBOX_STATUS_BIT;
 	omega4_mbox->b2a_status = OMEGA4_MBOX_STATUS_BIT;
 }

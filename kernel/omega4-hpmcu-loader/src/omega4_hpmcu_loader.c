@@ -337,7 +337,7 @@ static int omega4_hpmcu_start_locked(struct omega4_hpmcu_loader *loader)
 		entry = (resource_size_t)loader->entry_addr + loader->boot_offset;
 	else
 		entry = default_entry;
-	if (!sip_applied && entry == default_entry)
+	if (!sip_applied && !loader->entry_addr_valid && entry == default_entry)
 		entry = RV1103B_HPMCU_BOOT_ADDR + loader->boot_offset;
 
 	dev_info(loader->dev, "HPMCU boot addr reg before=0x%08x\n",
