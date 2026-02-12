@@ -379,7 +379,7 @@ void rwnx_rx_data_skb_resend(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
 		netdev_err(rwnx_vif->ndev, "Failed to copy skb");
 	}
 }
-
+#if 0
 static void rwnx_rx_data_skb_forward(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
 							 struct sk_buff *skb,  struct hw_rxhdr *rxhdr)
 {
@@ -456,7 +456,95 @@ static void rwnx_rx_data_skb_forward(struct rwnx_hw *rwnx_hw, struct rwnx_vif *r
 
 	rwnx_hw->stats.last_rx = jiffies;
 }
+#else//zsj--fix amsdu packet forward
+static void rwnx_rx_data_skb_forward(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
+                                    struct sk_buff *skb, struct hw_rxhdr *rxhdr)
+{
+    struct sk_buff_head list;  
+    struct sk_buff *cur_skb;   
 
+    __skb_queue_head_init(&list);
+
+#ifdef CONFIG_BR_SUPPORT
+    void *br_port = NULL;
+    if (1) {  
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 35))
+        br_port = rwnx_vif->ndev->br_port;
+#else
+        rcu_read_lock();
+        br_port = rcu_dereference(rwnx_vif->ndev->rx_handler_data);
+        rcu_read_unlock();
+#endif
+        if (br_port) {
+            int nat25_handle_frame(struct rwnx_vif *vif, struct sk_buff *skb);
+            
+            if (nat25_handle_frame(rwnx_vif, skb) == -1) {
+                dev_kfree_skb(skb);
+                return;
+            }
+        }
+    }
+#endif /* CONFIG_BR_SUPPORT */
+
+    if (rxhdr->flags_is_amsdu) {//zsj-add
+        AICWFDBG(LOGERROR, "%s: pkt is amsdu process first \n", __func__);
+        rwnx_rxdata_process_amsdu(rwnx_vif->rwnx_hw, skb, rwnx_vif->vif_index, &list);
+    } else {
+        __skb_queue_head(&list, skb);
+    }
+
+    while (!skb_queue_empty(&list)) {
+        cur_skb = __skb_dequeue(&list);
+
+        cur_skb->dev = rwnx_vif->ndev;
+        skb_reset_mac_header(cur_skb);//zsj
+
+        rwnx_vif->net_stats.rx_packets++;
+        rwnx_vif->net_stats.rx_bytes += cur_skb->len;
+
+        cur_skb->protocol = eth_type_trans(cur_skb, rwnx_vif->ndev);
+
+        memset(cur_skb->cb, 0, sizeof(cur_skb->cb));
+
+        REG_SW_SET_PROFILING(rwnx_hw, SW_PROF_IEEE80211RX);
+
+#ifdef CONFIG_FILTER_TCP_ACK
+        filter_rx_tcp_ack(rwnx_hw, cur_skb->data, cpu_to_le16(cur_skb->len));
+#endif
+
+#ifdef AICWF_ARP_OFFLOAD
+        if (RWNX_VIF_TYPE(rwnx_vif) == NL80211_IFTYPE_STATION || 
+            RWNX_VIF_TYPE(rwnx_vif) == NL80211_IFTYPE_P2P_CLIENT) {
+            arpoffload_proc(cur_skb, rwnx_vif);
+        }
+#endif
+
+#ifdef CONFIG_RX_NETIF_RECV_SKB
+        local_bh_disable();
+        netif_receive_skb(cur_skb);
+        local_bh_enable();
+#else
+        if (in_interrupt()) {
+            netif_rx(cur_skb);
+        } else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0)
+            netif_rx_ni(cur_skb);
+#else
+            ulong flags;
+            netif_rx(cur_skb);
+            local_irq_save(flags);
+            RAISE_RX_SOFTIRQ();
+            local_irq_restore(flags);
+#endif
+        }
+#endif /* CONFIG_RX_NETIF_RECV_SKB */
+
+        REG_SW_CLEAR_PROFILING(rwnx_hw, SW_PROF_IEEE80211RX);
+    }
+
+    rwnx_hw->stats.last_rx = jiffies;
+}
+#endif 
 
 static bool rwnx_rx_data_skb(struct rwnx_hw *rwnx_hw, struct rwnx_vif *rwnx_vif,
 							 struct sk_buff *skb,  struct hw_rxhdr *rxhdr)
@@ -1849,8 +1937,6 @@ int reord_process_unit(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u16 s
 	struct reord_ctrl_info *reord_info;
 	struct rwnx_vif *rwnx_vif = (struct rwnx_vif *)rx_priv->rwnx_vif;
 	struct ethhdr *eh = (struct ethhdr *)(skb->data);
-	u8 *da = eh->h_dest;
-	u8 is_mcast = ((*da) & 0x01) ? 1 : 0;
 
 	if (rwnx_vif == NULL || skb->len <= 14) {
 		dev_kfree_skb(skb);
@@ -1873,7 +1959,7 @@ int reord_process_unit(struct aicwf_rx_priv *rx_priv, struct sk_buff *skb, u16 s
 	preorder_ctrl = pframe->preorder_ctrl;
 	pframe->is_amsdu = is_amsdu;
 
-	if ((ntohs(eh->h_proto) == ETH_P_PAE) || is_mcast)
+	if (ntohs(eh->h_proto) == ETH_P_PAE)
 		return reord_single_frame_ind(rx_priv, pframe);
 
 	if ((rwnx_vif->wdev.iftype == NL80211_IFTYPE_STATION) || (rwnx_vif->wdev.iftype == NL80211_IFTYPE_P2P_CLIENT))
@@ -2158,6 +2244,14 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
 	u8 is_amsdu = 0;
 	bool resend = false, forward = true;
 	const struct ethhdr *eth;
+#ifdef CONFIG_SUPPORT_4ADDR
+	u8_l b_4addr = 0;
+#endif
+#ifdef CONFIG_BR_SUPPORT
+	int vif_idx;
+	struct rwnx_vif *vif_itr = NULL;
+	struct rwnx_sta *cur_sta;
+#endif
 
 	hw_rxhdr = (struct hw_rxhdr *)skb->data;
     
@@ -2296,6 +2390,14 @@ check_len_update:
 		skb_pull(skb, msdu_offset + 2); //+2 since sdio allign 58->60
 
 #define MAC_FCTRL_MOREFRAG 0x0400
+
+#ifdef CONFIG_SUPPORT_4ADDR
+		if (hw_rxhdr->flags_is_4addr) {
+			hdr_len += 6;
+			b_4addr = 1;
+		}
+#endif
+
 		frame_ctrl = (skb->data[1] << 8) | skb->data[0];
 		seq_num = ((skb->data[22] & 0xf0) >> 4) | (skb->data[23] << 4);
 		frag_num = (skb->data[22] & 0x0f);
@@ -2303,23 +2405,78 @@ check_len_update:
 
 		if ((skb->data[0] & 0x0f) == 0x08) {
 			if ((skb->data[0] & 0x80) == 0x80) {//qos data
-				hdr_len = 26;
+				hdr_len += 2;
+#ifdef CONFIG_SUPPORT_4ADDR
+				tid = b_4addr ? (skb->data[30] & 0x0F) : (skb->data[24] & 0x0F);
+#else
 				tid = skb->data[24] & 0x0F;
+#endif
 				is_qos = 1;
+#ifdef CONFIG_SUPPORT_4ADDR
+				if (b_4addr) {
+					if (skb->data[30] & 0x80)
+						is_amsdu = 1;
+				} else {
+					if (skb->data[24] & 0x80)
+						is_amsdu = 1;
+				}
+#else
 				if (skb->data[24] & 0x80)
 					is_amsdu = 1;
+#endif
 			}
 
 			if(skb->data[1] & 0x80)// htc
 				hdr_len += 4;
 
-			if ((skb->data[1] & 0x3) == 0x1)  {// to ds
+#ifdef CONFIG_SUPPORT_4ADDR
+			if (b_4addr) {
+				if ((skb->data[1] & 0x3) != 0x3) {
+					printk("aicwf: 4addr DS error, to_from ds:%d\n", skb->data[1] & 0x3);
+					print_hex_dump(KERN_ERR,"rx_4addr ",DUMP_PREFIX_NONE, 16, 1, skb->data, skb->len, false);
+				}
+				memcpy(ra, &skb->data[16], MAC_ADDR_LEN);
+				memcpy(ta, &skb->data[24], MAC_ADDR_LEN);
+				printk("aicwf 4addr: da: %pM, sa: %pM\n", ra, ta);
+			} else {
+				//printk("aicwf: to_from ds:%d\n", skb->data[1] & 0x3);
+				if((skb->data[1] & 0x3) == 0x1)  {// to ds
+					memcpy(ra, &skb->data[16], MAC_ADDR_LEN);
+					memcpy(ta, &skb->data[10], MAC_ADDR_LEN);
+				} else if((skb->data[1] & 0x3) == 0x2) { //from ds
+					memcpy(ta, &skb->data[16], MAC_ADDR_LEN);
+					memcpy(ra, &skb->data[4], MAC_ADDR_LEN);
+				}
+			}
+#else
+			if((skb->data[1] & 0x3) == 0x1)  {// to ds
 				memcpy(ra, &skb->data[16], MAC_ADDR_LEN);
 				memcpy(ta, &skb->data[10], MAC_ADDR_LEN);
-			} else if ((skb->data[1] & 0x3) == 0x2) { //from ds
+			} else if((skb->data[1] & 0x3) == 0x2) { //from ds
 				memcpy(ta, &skb->data[16], MAC_ADDR_LEN);
 				memcpy(ra, &skb->data[4], MAC_ADDR_LEN);
 			}
+#endif
+
+#ifdef CONFIG_BR_SUPPORT
+			if((skb->data[1] & 0x3) == 0x2) {
+				for (vif_idx = 0; vif_idx < NX_VIRT_DEV_MAX; vif_idx++) {
+					vif_itr = rwnx_hw->vif_table[vif_idx];
+					if (vif_itr && vif_itr->up && RWNX_VIF_TYPE(vif_itr) == NL80211_IFTYPE_AP) {
+						spin_lock_bh(&vif_itr->rwnx_hw->cb_lock);
+						list_for_each_entry(cur_sta, &vif_itr->ap.sta_list, list) {
+							if (!memcmp(cur_sta->mac_addr, ta, MAC_ADDR_LEN)) {
+								//printk("aicwf filter out, %pM\n", ta);
+								dev_kfree_skb(skb);
+								spin_unlock_bh(&vif_itr->rwnx_hw->cb_lock);
+								goto end;
+							}
+						}
+						spin_unlock_bh(&vif_itr->rwnx_hw->cb_lock);
+					}
+				}
+			}
+#endif
 
 			pull_len += (hdr_len + 8);
 
@@ -2589,6 +2746,7 @@ check_len_update:
 				}
 
 				if (hw_rxhdr->flags_is_4addr && !rwnx_vif->use_4addr) {
+					printk("aicwf: 4addr flag error\n");
 #ifdef CONFIG_GKI
 					rwnx_cfg80211_rx_unexpected_4addr_frame(rwnx_vif->ndev,
 													   sta->mac_addr, GFP_ATOMIC);

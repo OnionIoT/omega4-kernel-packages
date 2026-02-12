@@ -72,7 +72,7 @@ int rwnx_send_get_macaddr_req(struct rwnx_hw *rwnx_hw, struct mm_get_mac_addr_cf
 
 #ifdef CONFIG_RWNX_FULLMAC
 int rwnx_send_me_config_req(struct rwnx_hw *rwnx_hw);
-int rwnx_send_me_chan_config_req(struct rwnx_hw *rwnx_hw, const char *ccode);
+int rwnx_send_me_chan_config_req(struct rwnx_hw *rwnx_hw, char *ccode);
 int rwnx_send_me_set_control_port_req(struct rwnx_hw *rwnx_hw, bool opened,
 									  u8 sta_idx);
 int rwnx_send_me_sta_add(struct rwnx_hw *rwnx_hw, struct station_parameters *params,
@@ -153,6 +153,9 @@ int rwnx_send_dbg_set_mod_filter_req(struct rwnx_hw *rwnx_hw, u32 filter);
 #ifdef CONFIG_RFTEST
 int rwnx_send_rftest_req(struct rwnx_hw *rwnx_hw, u32_l cmd, u32_l argc, u8_l *argv, struct dbg_rftest_cmd_cfm *cfm);
 #endif
+#ifdef CONFIG_WOWLAN
+int rwnx_send_set_pkt_filter_req(struct rwnx_hw *rwnx_hw, u8_l *param);
+#endif
 #ifdef CONFIG_MCU_MESSAGE
 int rwnx_send_dbg_custom_msg_req(struct rwnx_hw *rwnx_hw,
                                  u32 cmd, void *buf, u32 len, u32 action,
@@ -179,6 +182,9 @@ int rwnx_send_set_temp_comp_req(struct rwnx_hw *rwnx_hw, struct mm_set_vendor_sw
 int rwnx_send_vendor_hwconfig_req(struct rwnx_hw *rwnx_hw, uint32_t hwconfig_id, int32_t *param, int32_t *param_out);
 int rwnx_send_vendor_swconfig_req(struct rwnx_hw *rwnx_hw, uint32_t swconfig_id, int32_t *param_in, int32_t *param_out);
 int rwnx_send_mask_set_ext_flags_req(struct rwnx_hw *rwnx_hw, uint32_t flags_mask, uint32_t flags_val, struct mm_set_vendor_swconfig_cfm *cfm);
+int rwnx_send_vendor_hwconfig_req_x2(struct rwnx_hw *rwnx_hw, uint32_t hwconfig_id, int32_t *param, int32_t *param_out);
+int rwnx_send_vendor_swconfig_req_x2(struct rwnx_hw *rwnx_hw, uint32_t swconfig_id, int32_t *param_in, int32_t *param_out);
+
 int rwnx_send_get_fw_version_req(struct rwnx_hw *rwnx_hw, struct mm_get_fw_version_cfm *cfm);
 int rwnx_send_txpwr_idx_req(struct rwnx_hw *rwnx_hw);
 int rwnx_send_txpwr_ofst_req(struct rwnx_hw *rwnx_hw);

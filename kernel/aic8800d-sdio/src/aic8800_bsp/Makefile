@@ -1,6 +1,7 @@
 CONFIG_SDIO_SUPPORT := y
 CONFIG_SDIO_PWRCTRL := n
-CONFIG_AIC_FW_PATH ?= "/vendor/etc/firmware"
+CONFIG_AIC_FW_PATH = "/vendor/etc/firmware"
+#CONFIG_AIC_FW_PATH = "/lib/firmware/aic8800D80"
 export CONFIG_AIC_FW_PATH
 ccflags-y += -DCONFIG_AIC_FW_PATH=\"$(CONFIG_AIC_FW_PATH)\"
 
@@ -10,7 +11,7 @@ ccflags-y += -DAICWF_SDIO_SUPPORT
 ccflags-$(CONFIG_SDIO_PWRCTRL) += -DCONFIG_SDIO_PWRCTRL
 endif
 
-CONFIG_GPIO_WAKEUP = n
+CONFIG_GPIO_WAKEUP ?= n
 CONFIG_M2D_OTA_AUTO_SUPPORT = n
 CONFIG_M2D_OTA_LZMA_SUPPORT = n
 CONFIG_LINK_DET_5G = y
@@ -29,7 +30,7 @@ CONFIG_EXT_FEM_8800DCDW = n
 CONFIG_RESV_MEM_SUPPORT ?= y
 CONFIG_AMSDU_RX = y
 CONFIG_IRQ_FALL ?= n
-CONFIG_SDIO_BT = y
+CONFIG_SDIO_BT = n
 CONFIG_RADAR_OR_IR_DETECT =n
 CONFIG_FOR_IPCAM = n
 CONFIG_BAND_STEERING = n
@@ -39,6 +40,10 @@ ifeq ($(CONFIG_EXT_FEM_8800DCDW), y)
 CONFIG_DPD = n
 CONFIG_FORCE_DPD_CALIB = n
 CONFIG_LOFT_CALIB = y
+endif
+
+ifeq ($(CONFIG_OOB), y)
+CONFIG_GPIO_SET = y
 endif
 
 ccflags-$(CONFIG_GPIO_WAKEUP) += -DCONFIG_GPIO_WAKEUP
@@ -64,12 +69,13 @@ ccflags-$(CONFIG_RADAR_OR_IR_DETECT) += -DCONFIG_RADAR_OR_IR_DETECT
 ccflags-$(CONFIG_FOR_IPCAM) += -DCONFIG_FOR_IPCAM
 ccflags-$(CONFIG_BAND_STEERING) += -DCONFIG_BAND_STEERING
 ccflags-$(CONFIG_PRBREQ_REPORT) += -DCONFIG_PRBREQ_REPORT
-
+ccflags-$(CONFIG_GPIO_SET) += -DCONFIG_GPIO_SET
 
 obj-m := $(MODULE_NAME).o
 $(MODULE_NAME)-y := \
 	aic8800dc_compat.o \
 	aic8800d80_compat.o \
+	aic8800d80n_compat.o \
 	aic8800d80x2_compat.o \
 	aic_bsp_main.o \
 	aic_bsp_driver.o \
@@ -152,3 +158,4 @@ uninstall:
 
 clean:
 	rm -rf *.o *.ko *.o.* *.mod.* modules.* Module.* .a* .o* .*.o.* *.mod .tmp* .cache.mk built-in.a
+

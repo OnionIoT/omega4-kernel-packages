@@ -1,7 +1,7 @@
 #include "aic8800d80x2_compat.h"
 #include "aic_bsp_driver.h"
 
-#define RAM_FMAC_FW_ADDR_8800D80X2           0x120000
+#define RAM_FMAC_FW_ADDR_8800D80X2           0x128000
 #define RAM_FMAC_RF_FW_ADDR_8800D80X2        0x120000
 
 #define USER_PWROFST_COVER_CALIB_FLAG   (0x01U << 0)
@@ -25,6 +25,7 @@
 #define CFG_USER_SETCH_LOFT_CALIB_EN        (1)
 #define CFG_USER_SETCH_RXDC_CALIB_EN        (0)
 
+extern int testmode;
 extern int adap_test;
 #define NEW_PATCH_BUFFER_MAP    1
 #define AIC_PATCH_MAGIG_NUM     0x48435450 // "PTCH"
@@ -82,6 +83,10 @@ u32 patch_tbl_d80x2[][2] =
             #endif
         0)
     }, // user_ext_flags
+
+	#ifdef CONFIG_GPIO_SET
+	{0x238, 0x0001000F}
+	#endif
 };
 
 //adap test
@@ -108,13 +113,14 @@ int aicwifi_patch_config_8800d80x2(struct aic_sdio_dev *sdiodev)
     int cnt = 0;
     //adap test
     int adap_patch_cnt = 0;
+	u32 fw_addr = (testmode)? RAM_FMAC_RF_FW_ADDR_8800D80X2 : RAM_FMAC_FW_ADDR_8800D80X2;
 
     if (adap_test) {
         AICWFDBG(LOGINFO, "%s adap test \r\n", __func__);
         adap_patch_cnt = sizeof(adaptivity_patch_tbl_d80x2)/sizeof(u32)/2;
     }
 
-    rd_patch_addr = RAM_FMAC_FW_ADDR_8800D80X2 + 0x01A8;
+    rd_patch_addr = fw_addr + 0x01A8;
     aic_patch_addr = rd_patch_addr + 8;
 
     AICWFDBG(LOGINFO, "Read FW mem: %08x\n", rd_patch_addr);

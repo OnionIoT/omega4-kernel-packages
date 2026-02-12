@@ -341,6 +341,7 @@ struct rwnx_vif {
 	struct rwnx_key key[6];
     unsigned long drv_flags;
 	atomic_t drv_conn_state;
+	spinlock_t conn_state_lock;
 	u8 drv_vif_index;           /* Identifier of the VIF in driver */
 	u8 vif_index;               /* Identifier of the station in FW */
 	u8 ch_index;                /* Channel context identifier */
@@ -648,7 +649,7 @@ struct amsdu_subframe_hdr {
 
 
 /* rwnx driver status */
-void rwnx_set_conn_state(atomic_t *drv_conn_state, int state);
+void rwnx_set_conn_state(struct rwnx_vif *vif, atomic_t *drv_conn_state, int state);
 
 enum rwnx_drv_connect_status { 
 	RWNX_DRV_STATUS_DISCONNECTED = 0,
@@ -788,6 +789,13 @@ struct rwnx_hw {
 	s8_l temp;
 #ifdef CONFIG_TEMP_CONTROL
 	unsigned long started_jiffies;
+#endif
+#ifdef CONFIG_DYNAMIC_PWR
+	struct timer_list pwrloss_timer;
+	struct work_struct pwrloss_work;
+	struct rwnx_vif *read_rssi_vif;
+	s8 pwrloss_lvl;
+	u8 sta_rssi_idx;
 #endif
 #ifdef CONFIG_BAND_STEERING
 	u8_l iface_idx;

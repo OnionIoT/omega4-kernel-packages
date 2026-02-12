@@ -16,6 +16,10 @@
 #include <linux/version.h>
 #include <net/cfg80211.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
+#define NL80211_RRF_NO_IR 1<<7
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 15, 0)
 #define REG_RULE_EXT(start, end, bw, gain, eirp, dfs_cac, reg_flags)           \
 	{                                                                          \

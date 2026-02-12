@@ -343,6 +343,7 @@ int aicbsp_resv_mem_deinit(void);
 #define AICBSP_FW_PATH_MAX          200
 
 #define RAM_FMAC_FW_ADDR                    0x00120000
+#define RAM_FMAC_FW_ADDR_D80X2              0x00128000
 #define RAM_FMAC_FW_PATCH_ADDR              0x00190000
 #define FW_RAM_ADID_BASE_ADDR               0x00161928
 #define FW_RAM_ADID_BASE_ADDR_U03           0x00161928
@@ -501,6 +502,7 @@ enum chip_rev {
 #define AICBT_TXPWR_LVL            0x00006020
 #define AICBT_TXPWR_LVL_8800dc            0x00006f2f
 #define AICBT_TXPWR_LVL_8800d80           0x00006f2f
+#define AICBT_TXPWR_LVL_8800d80n           0x00006f2f
 #define AICBT_TXPWR_LVL_8800d80x2           0x00006f2f
 
 
@@ -510,6 +512,7 @@ enum chip_rev {
 
 #define AICBT_BTMODE_DEFAULT_8800d80x2    AICBT_BTMODE_BT_ONLY_COANT
 #define AICBT_BTMODE_DEFAULT_8800d80    AICBT_BTMODE_BT_ONLY_COANT
+#define AICBT_BTMODE_DEFAULT_8800d80n    AICBT_BTMODE_BT_ONLY_COANT
 #define AICBT_BTMODE_DEFAULT            AICBT_BTMODE_BT_ONLY_SW
 #ifdef CONFIG_SDIO_BT
 #define AICBT_BTPORT_DEFAULT            AICBT_BTPORT_MB
@@ -522,11 +525,12 @@ enum chip_rev {
 #define AICBT_TXPWR_LVL_DEFAULT         AICBT_TXPWR_LVL
 #define AICBT_TXPWR_LVL_DEFAULT_8800dc  AICBT_TXPWR_LVL_8800dc
 #define AICBT_TXPWR_LVL_DEFAULT_8800d80 AICBT_TXPWR_LVL_8800d80
+#define AICBT_TXPWR_LVL_DEFAULT_8800d80n AICBT_TXPWR_LVL_8800d80n
 #define AICBT_TXPWR_LVL_DEFAULT_8800d80x2 AICBT_TXPWR_LVL_8800d80x2
 
 
 #define FEATURE_SDIO_CLOCK          50000000 // 0: default, other: target clock rate
-#define FEATURE_SDIO_CLOCK_V3       50000000 // downgrade to SDIO 2.0 rate
+#define FEATURE_SDIO_CLOCK_V3       50000000 // keep SDIO2.0 rate for 3.3V boards
 #define FEATURE_SDIO_PHASE          2        // 0: default, 2: 180°
 
 struct aicbt_patch_table {
@@ -593,6 +597,7 @@ extern const struct aicbsp_firmware fw_8800dc_h_u02[];
 extern const struct aicbsp_firmware fw_8800d80_u01[];
 extern const struct aicbsp_firmware fw_8800d80_u02[];
 extern const struct aicbsp_firmware fw_8800d80_h_u02[];
+extern const struct aicbsp_firmware fw_8800d80n_u02[];
 extern const struct aicbsp_firmware fw_8800d80x2[];
 
 #endif

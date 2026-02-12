@@ -62,7 +62,7 @@ struct rwnx_mod_params rwnx_mod_params = {
 	COMMON_PARAM(listen_itv, 0, 0)
 	COMMON_PARAM(listen_bcmc, true, true)
 	COMMON_PARAM(lp_clk_ppm, 20, 20)
-	COMMON_PARAM(ps_on, false, false)
+	COMMON_PARAM(ps_on, true, true)
 	COMMON_PARAM(tx_lft, RWNX_TX_LIFETIME_MS, RWNX_TX_LIFETIME_MS)
 	COMMON_PARAM(amsdu_maxnb, NX_TX_PAYLOAD_MAX, NX_TX_PAYLOAD_MAX)
 	// By default, only enable UAPSD for Voice queue (see IEEE80211_DEFAULT_UAPSD_QUEUE comment)
@@ -120,7 +120,7 @@ module_param_named(amsdu_maxnb, rwnx_mod_params.amsdu_maxnb, int, S_IRUGO | S_IW
 MODULE_PARM_DESC(amsdu_maxnb, "Maximum number of MSDUs inside an A-MSDU in TX: (Default: NX_TX_PAYLOAD_MAX)");
 
 module_param_named(ps_on, rwnx_mod_params.ps_on, bool, S_IRUGO);
-MODULE_PARM_DESC(ps_on, "Enable PowerSaving (Default: 0-Disabled)");
+MODULE_PARM_DESC(ps_on, "Enable PowerSaving (Default: 1-Enabled)");
 
 module_param_named(tx_lft, rwnx_mod_params.tx_lft, int, 0644);
 MODULE_PARM_DESC(tx_lft, "Tx lifetime (ms) - setting it to 0 disables retries "
@@ -1239,7 +1239,9 @@ static void rwnx_set_he_capa(struct rwnx_hw *rwnx_hw, struct wiphy *wiphy)
 	he_cap->he_cap_elem.phy_cap_info[8] |= IEEE80211_HE_PHY_CAP8_20MHZ_IN_40MHZ_HE_PPDU_IN_2G;
 	he_cap->he_cap_elem.phy_cap_info[9] |= IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_COMP_SIGB |
 										   IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_NON_COMP_SIGB;
-	if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2)
+	if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2)
 	    mcs_map = rwnx_hw->mod_params->he_mcs_map;
     else if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8801 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800DC ||
         rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800DW)
@@ -1384,7 +1386,9 @@ static void rwnx_set_he_capa(struct rwnx_hw *rwnx_hw, struct wiphy *wiphy)
 	he_cap->he_cap_elem.phy_cap_info[9] |= IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_COMP_SIGB |
 					IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_NON_COMP_SIGB;
 	#endif
-	if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
+	if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
 	    mcs_map = rwnx_hw->mod_params->he_mcs_map;
     }
     else if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8801 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800DC ||
@@ -1506,7 +1510,9 @@ static void rwnx_set_he_capa(struct rwnx_hw *rwnx_hw, struct wiphy *wiphy)
 		he_cap->he_cap_elem.phy_cap_info[9] |= IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_COMP_SIGB |
 											   IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_NON_COMP_SIGB;
 		#endif
-		if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2)
+		if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+			rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+			rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2)
             mcs_map = rwnx_hw->mod_params->he_mcs_map;
         else if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8801 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800DC ||
             rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800DW)
@@ -1727,16 +1733,22 @@ int rwnx_handle_dynparams(struct rwnx_hw *rwnx_hw, struct wiphy *wiphy)
 	}
 #endif
 
-    if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2) {
+    if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2) {
         rwnx_hw->mod_params->sgi80 = true;
         rwnx_hw->mod_params->use_80 = true;
     }
 
-    if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 || rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2) {
+    if (rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2) {
         rwnx_hw->mod_params->use_80 = true;    
     }
     
-    if (rwnx_hw->sdiodev->chipid != PRODUCT_ID_AIC8800D80 && rwnx_hw->sdiodev->chipid != PRODUCT_ID_AIC8800D80X2 &&
+    if (rwnx_hw->sdiodev->chipid != PRODUCT_ID_AIC8800D80 &&
+		rwnx_hw->sdiodev->chipid != PRODUCT_ID_AIC8800D80N &&
+		rwnx_hw->sdiodev->chipid != PRODUCT_ID_AIC8800D80X2 &&
         rwnx_hw->mod_params->he_mcs_map == IEEE80211_HE_MCS_SUPPORT_0_11) {
         AICWFDBG(LOGINFO,"%s unsupport mcs11 change to mcs9", __func__);
         rwnx_hw->mod_params->he_mcs_map = IEEE80211_HE_MCS_SUPPORT_0_9;
@@ -1793,3 +1805,4 @@ void rwnx_custregd(struct rwnx_hw *rwnx_hw, struct wiphy *wiphy)
 #endif
 
 }
+

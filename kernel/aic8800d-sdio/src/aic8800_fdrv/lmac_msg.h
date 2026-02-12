@@ -2013,6 +2013,23 @@ enum vendor_hwconfig_tag{
 	KEEPALIVE_PKT_REQ,
 };
 
+enum vendor_hwconfig_tag_x2{
+	ACS_TXOP_REQ_X2 = 0,
+	CHANNEL_ACCESS_REQ_X2,
+	MAC_TIMESCALE_REQ_X2,
+	CCA_THRESHOLD_REQ_X2,
+	BWMODE_REQ_X2,
+	CHIP_TEMP_GET_REQ_X2,
+	STBC_MCS_SET_REQ_X2,
+	MAX_AGG_TX_CNT_REQ_X2,
+	MAX_BW_MCS_THRESH_SET_REQ_X2,
+	DCM_FORCE_EN_REQ_X2,
+	AUTO_CCA_EN_REQ_X2,
+	NSS_1T2R_REQ_X2,
+	ON_AIR_DUTY_CYCLE_REQ_X2,
+};
+
+
 enum {
     BWMODE20M = 0,
     BWMODE10M,
@@ -2086,6 +2103,56 @@ struct mm_set_ap_ps_level_req
     u32_l hwconfig_id;
     u8 ap_ps_level;
 };
+struct mm_get_stbc_msc_req
+{
+    u32_l hwconfig_id;
+    u8_l enable;
+    u8_l mcs_thresh;
+};
+
+struct mm_set_max_tx_agg_cnt_req
+{
+    u32_l hwconfig_id;
+    u8_l enale;
+    u8_l mcs_thresh;
+    u8_l max_agg_cnt[AC_MAX];
+};
+
+struct mm_set_max_bw_mcs_thresh_req
+{
+    u32_l hwconfig_id;
+    u8_l enale;
+    u8_l max_bw_mcs_thresh;
+};
+
+struct mm_set_dcm_force_en_req
+{
+    u32_l hwconfig_id;
+    u8_l enable;
+};
+
+
+struct mm_set_auto_cca_en_req
+{
+    u32_l hwconfig_id;
+    u8_l enable;
+    int8_t max_cca_thresh;
+    u8_l default_cca_set;
+    int8_t default_cca_thresh;
+};
+
+struct mm_set_nss_1t2r_req
+{
+    u32_l hwconfig_id;
+    u8_l enable;
+};
+
+struct mm_set_on_air_duty_cycle_req
+{
+    u32_l hwconfig_id;
+    u8_l enable;
+    u8_l percent;//10 means 10%, 1-99
+};
 
 struct mm_set_vendor_hwconfig_cfm
 {
@@ -2105,9 +2172,10 @@ struct mm_set_customized_freq_req
 struct mm_set_wakeup_info_req
 {
 	u32_l hwconfig_id;
+	u16_l code;
 	u16_l offset;
-	u8_l  length;
-	u8_l  mask_and_patten[];
+	u16_l  length;	
+	u8_l  mask_and_pattern[];
 
 };
 
@@ -2166,6 +2234,18 @@ enum vendor_swconfig_tag
     EXT_FLAGS_GET_REQ,
     EXT_FLAGS_MASK_SET_REQ,
 };
+
+enum vendor_swconfig_tag_x2
+{
+    BCN_CFG_REQ_X2 = 0,
+    TEMP_COMP_SET_REQ_X2,
+    TEMP_COMP_GET_REQ_X2,
+    EXT_FLAGS_SET_REQ_X2,
+    EXT_FLAGS_GET_REQ_X2,
+    EXT_FLAGS_MASK_SET_REQ_X2,
+    TWO_ANT_RSSI_GET_REQ_X2,
+};
+
 
 struct mm_set_bcn_cfg_req
 {

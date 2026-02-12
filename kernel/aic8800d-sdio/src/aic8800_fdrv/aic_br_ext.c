@@ -17,11 +17,14 @@
  ******************************************************************************/
 
 #define _AIC_BR_EXT_C_
+#include <linux/version.h>
 
 #ifdef __KERNEL__
 	#include <linux/if_arp.h>
 	#include <net/ip.h>
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
 	#include <net/ipx.h>
+#endif
 	#include <linux/atalk.h>
 	#include <linux/udp.h>
 	#include <linux/if_pppox.h>
@@ -57,6 +60,7 @@
 #define MAGIC_CODE		0x8186
 #define MAGIC_CODE_LEN	2
 #define WAIT_TIME_PPPOE	5	/* waiting time for pppoe server in sec */
+
 
 /*-----------------------------------------------------------------
   How database records network address:
@@ -507,7 +511,6 @@ static void __nat25_db_network_insert(struct rwnx_vif *vif,
 	spin_unlock_bh(&vif->br_ext_lock);
 }
 
-
 static void __nat25_db_print(struct rwnx_vif *vif)
 {
 	spin_lock_bh(&vif->br_ext_lock);
@@ -750,6 +753,22 @@ int nat25_db_handle(struct rwnx_vif *vif, struct sk_buff *skb, int method)
 
 	protocol = *((unsigned short *)(skb->data + 2 * ETH_ALEN));
 
+#if 0
+	printk("nat25_db_handle: DA=%02x%02x%02x%02x%02x%02x SA=%02x%02x%02x%02x%02x%02x\n",
+			     skb->data[0],
+			     skb->data[1],
+			     skb->data[2],
+			     skb->data[3],
+			     skb->data[4],
+			     skb->data[5],
+			     skb->data[6],
+			     skb->data[7],
+			     skb->data[8],
+			     skb->data[9],
+			     skb->data[10],
+			     skb->data[11]);
+#endif
+
 	/*---------------------------------------------------*/
 	/*                 Handle IP frame                  */
 	/*---------------------------------------------------*/
@@ -853,7 +872,6 @@ int nat25_db_handle(struct rwnx_vif *vif, struct sk_buff *skb, int method)
 
 		case NAT25_LOOKUP: {
 			printk("NAT25: Lookup ARP\n");
-
 			arp_ptr += arp->ar_hln;
 			sender = (unsigned int *)arp_ptr;
 			arp_ptr += (arp->ar_hln + arp->ar_pln);
@@ -878,23 +896,34 @@ int nat25_db_handle(struct rwnx_vif *vif, struct sk_buff *skb, int method)
 	/*---------------------------------------------------*/
 	/*         Handle IPX and Apple Talk frame          */
 	/*---------------------------------------------------*/
-	else if ((protocol == __constant_htons(ETH_P_IPX)) ||
+	else if (
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
+		(protocol == __constant_htons(ETH_P_IPX)) ||
+#endif
 		 (protocol == __constant_htons(ETH_P_ATALK)) ||
 		 (protocol == __constant_htons(ETH_P_AARP))) {
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
 		unsigned char ipx_header[2] = {0xFF, 0xFF};
 		struct ipxhdr	*ipx = NULL;
+#endif
 		struct elapaarp	*ea = NULL;
 		struct ddpehdr	*ddp = NULL;
 		unsigned char *framePtr = skb->data + ETH_HLEN;
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
 		if (protocol == __constant_htons(ETH_P_IPX)) {
 			printk("NAT25: Protocol=IPX (Ethernet II)\n");
 			ipx = (struct ipxhdr *)framePtr;
-		} else { /* if(protocol <= __constant_htons(ETH_FRAME_LEN)) */
+		} else
+#endif
+		{ /* if(protocol <= __constant_htons(ETH_FRAME_LEN)) */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
 			if (!memcmp(ipx_header, framePtr, 2)) {
 				printk("NAT25: Protocol=IPX (Ethernet 802.3)\n");
 				ipx = (struct ipxhdr *)framePtr;
-			} else {
+			} else
+#endif
+			{
 				unsigned char ipx_8022_type =  0xE0;
 				unsigned char snap_8022_type = 0xAA;
 
@@ -904,13 +933,15 @@ int nat25_db_handle(struct rwnx_vif *vif, struct sk_buff *skb, int method)
 					unsigned char ddp_snap_id[5] = {0x08, 0x00, 0x07, 0x80, 0x9B};	/* Apple Talk DDP SNAP ID */
 
 					framePtr += 3;	/* eliminate the 802.2 header */
-
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
 					if (!memcmp(ipx_snap_id, framePtr, 5)) {
 						framePtr += 5;	/* eliminate the SNAP header */
 
 						printk("NAT25: Protocol=IPX (Ethernet SNAP)\n");
 						ipx = (struct ipxhdr *)framePtr;
-					} else if (!memcmp(aarp_snap_id, framePtr, 5)) {
+					} else
+#endif
+					if (!memcmp(aarp_snap_id, framePtr, 5)) {
 						framePtr += 5;	/* eliminate the SNAP header */
 
 						ea = (struct elapaarp *)framePtr;
@@ -923,7 +954,9 @@ int nat25_db_handle(struct rwnx_vif *vif, struct sk_buff *skb, int method)
 							framePtr[1], framePtr[2], framePtr[3], framePtr[4]);
 						return -1;
 					}
-				} else if (*framePtr == ipx_8022_type) {
+				}
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
+					else if (*framePtr == ipx_8022_type) {
 					framePtr += 3;	/* eliminate the 802.2 header */
 
 					if (!memcmp(ipx_header, framePtr, 2)) {
@@ -932,9 +965,11 @@ int nat25_db_handle(struct rwnx_vif *vif, struct sk_buff *skb, int method)
 					} else
 						return -1;
 				}
+#endif
 			}
 		}
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 0)
 		/*   IPX  */
 		if (ipx != NULL) {
 			switch (method) {
@@ -1001,10 +1036,11 @@ int nat25_db_handle(struct rwnx_vif *vif, struct sk_buff *skb, int method)
 			default:
 				return -1;
 			}
-		}
+		}else
+#endif
 
 		/*   AARP  */
-		else if (ea != NULL) {
+		if (ea != NULL) {
 			/* Sanity check fields. */
 			if (ea->hw_len != ETH_ALEN || ea->pa_len != AARP_PA_ALEN) {
 				printk("NAT25: Appletalk AARP Sanity check fail!\n");

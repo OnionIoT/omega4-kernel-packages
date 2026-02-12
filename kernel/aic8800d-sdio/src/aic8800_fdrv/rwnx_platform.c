@@ -691,7 +691,7 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
     }
 
     /* start to read from firmware file */
-    buffer = kzalloc(size, GFP_KERNEL);
+    buffer = kzalloc(size + 1, GFP_KERNEL);
     if (!buffer) {
         *fw_buf = NULL;
         __putname(path);
@@ -706,6 +706,7 @@ static int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *dev
     rdlen = kernel_read(fp, fp->f_pos, buffer, size);
     #endif
 
+    *((char*)buffer + size) = 0;
     if (size != rdlen) {
         AICWFDBG(LOGERROR, "%s: %s file rdlen invalid %d\n", __func__, name, (int)rdlen);
         *fw_buf = NULL;
@@ -1016,7 +1017,9 @@ s8_l get_txpwr_max(s8_l power)
 			power += userconfig_info.txpwr_loss.loss_value_2g4;
 		}
 	}
-	else if (g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80){
+	else if (g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+		g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+		g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80WN){
 		for (i = 0; i <= 11; i++){
 			if(power < userconfig_info.txpwr_lvl_v3.pwrlvl_11b_11ag_2g4[i])
 				power = userconfig_info.txpwr_lvl_v3.pwrlvl_11b_11ag_2g4[i];
@@ -1074,7 +1077,9 @@ s8_l get_txpwr_max(s8_l power)
 void set_txpwr_loss_ofst(s8_l value)
 {
 	int i=0;
-	if (g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80){
+	if (g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+		g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+		g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80WN){
 		for (i = 0; i <= 11; i++){
 			userconfig_info.txpwr_lvl_v3.pwrlvl_11b_11ag_2g4[i] += value;
 		}
@@ -3267,6 +3272,12 @@ static int rwnx_plat_userconfig_load(struct rwnx_hw *rwnx_hw) {
 #ifdef CONFIG_POWER_LIMIT
 		rwnx_plat_powerlimit_load_8800d80(rwnx_hw);
 #endif
+	}else if(rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+		rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80WN){
+		rwnx_plat_userconfig_load_8800d80n(rwnx_hw);
+#ifdef CONFIG_POWER_LIMIT
+		rwnx_plat_powerlimit_load_8800d80n(rwnx_hw);
+#endif
 	}else if(rwnx_hw->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
 		rwnx_plat_userconfig_load_8800d80x2(rwnx_hw);
 #ifdef CONFIG_POWER_LIMIT
@@ -3328,8 +3339,6 @@ int rwnx_platform_on(struct rwnx_hw *rwnx_hw, void *config)
 			return ret;
 		}
 #endif
-
-
 	rwnx_plat_userconfig_load(rwnx_hw);
 
 	//rwnx_plat->enabled = true;

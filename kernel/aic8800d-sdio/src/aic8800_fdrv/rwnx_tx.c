@@ -1425,6 +1425,11 @@ netdev_tx_t rwnx_start_xmit(struct sk_buff *skb, struct net_device *dev)
 	struct msg_buf *msgbuf = NULL;
 #endif
 
+	if(skb->len <= sizeof(struct ethhdr)) {
+	   AICWFDBG(LOGINFO, "len (%d) too short, skip \n", skb->len);
+	   return NETDEV_TX_OK;
+	 }
+
 #ifdef CONFIG_ONE_TXQ
     skb->queue_mapping = rwnx_select_txq(rwnx_vif, skb);
 #endif

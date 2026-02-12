@@ -1739,8 +1739,8 @@ int rwnx_radar_dump_pattern_detector(char *buf, size_t len,
 			}
 			size_needed += sizeof(info);
 
-		return size_needed;
 		}
+		return size_needed;
 	}
 
 	/* */

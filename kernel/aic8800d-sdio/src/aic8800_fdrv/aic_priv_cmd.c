@@ -775,7 +775,10 @@ static int aic_priv_cmd_rdwr_pwrlvl (struct rwnx_hw *rwnx_hw, int argc, char *ar
 		AICWFDBG(LOGERROR, "wrong func: %x\n", func);
 		return -EINVAL;
 	}
-	if(dev->chipid == PRODUCT_ID_AIC8800D80 || dev->chipid == PRODUCT_ID_AIC8800D80X2){
+	if(dev->chipid == PRODUCT_ID_AIC8800D80 ||
+		dev->chipid == PRODUCT_ID_AIC8800D80N ||
+		dev->chipid == PRODUCT_ID_AIC8800D80WN ||
+		dev->chipid == PRODUCT_ID_AIC8800D80X2){
 		memcpy(command, &cfm.rftest_result[0], 6 * 12);
 		return (6 * 12);
 	} else {
@@ -801,14 +804,19 @@ static int aic_priv_cmd_rdwr_pwrofst (struct rwnx_hw *rwnx_hw, int argc, char *a
 	if (func == 0) { // read cur
 		rwnx_send_rftest_req(rwnx_hw, RDWR_PWROFST, 0, NULL, &cfm);
 	} else if (func <= 4) { // write 2.4g/5g pwr ofst and ant0/1
-		if ((argc > 4) && (dev->chipid == PRODUCT_ID_AIC8800D80 || dev->chipid == PRODUCT_ID_AIC8800D80X2)) {
+		if ((argc > 4) && (dev->chipid == PRODUCT_ID_AIC8800D80 ||
+			dev->chipid == PRODUCT_ID_AIC8800D80N ||
+			dev->chipid == PRODUCT_ID_AIC8800D80X2)) {
 			u8_l type = (u8_l)command_strtoul(argv[2], NULL, 16);
 			u8_l chgrp = (u8_l)command_strtoul(argv[3], NULL, 16);
 			s8_l pwrofst = (s8_l)command_strtoul(argv[4], NULL, 10);
 			u8_l buf[4] = {func, type, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set pwrofst_%s:[%x][%x]=%d\r\n", (func == 1) ? "2.4g" : "5g", type, chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_PWROFST, sizeof(buf), buf, &cfm);
-		} else if ((argc > 3) && (dev->chipid != PRODUCT_ID_AIC8800D80) && (dev->chipid != PRODUCT_ID_AIC8800D80X2)) {
+		} else if ((argc > 3) && (dev->chipid != PRODUCT_ID_AIC8800D80) &&
+			(dev->chipid != PRODUCT_ID_AIC8800D80N) &&
+			(dev->chipid != PRODUCT_ID_AIC8800D80WN) &&
+			(dev->chipid != PRODUCT_ID_AIC8800D80X2)) {
 			u8_l chgrp = (u8_l)command_strtoul(argv[2], NULL, 16);
 			s8_l pwrofst = (s8_l)command_strtoul(argv[3], NULL, 10);
 			u8_l buf[3] = {func, chgrp, (u8_l)pwrofst};
@@ -823,7 +831,9 @@ static int aic_priv_cmd_rdwr_pwrofst (struct rwnx_hw *rwnx_hw, int argc, char *a
 	}
 	if ((dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DW)) { // 3 = 3 (2.4g)
 		res_len = 3;
-	} else if (dev->chipid == PRODUCT_ID_AIC8800D80) { // 3 * 2 (2.4g) + 3 * 6 (5g)
+	} else if (dev->chipid == PRODUCT_ID_AIC8800D80 ||
+		dev->chipid == PRODUCT_ID_AIC8800D80N ||
+		dev->chipid == PRODUCT_ID_AIC8800D80WN) { // 3 * 2 (2.4g) + 3 * 6 (5g)
 		res_len = 3 * 3 + 3 * 6;
 	} else if (dev->chipid == PRODUCT_ID_AIC8800D80X2) { // ant0/1
 		res_len = ( 3 * 3 + 3 * 6 ) * 2;
@@ -908,14 +918,20 @@ static int aic_priv_cmd_rdwr_efuse_pwrofst (struct rwnx_hw *rwnx_hw, int argc, c
 	if (func == 0) { // read cur
 		rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWROFST, 0, NULL, &cfm);
 	} else if (func <= 4) { // write 2.4g/5g pwr ofst and ant0/1
-		if ((argc > 4) && (dev->chipid == PRODUCT_ID_AIC8800D80 || dev->chipid == PRODUCT_ID_AIC8800D80X2)) {
+		if ((argc > 4) && (dev->chipid == PRODUCT_ID_AIC8800D80 ||
+			dev->chipid == PRODUCT_ID_AIC8800D80N ||
+			dev->chipid == PRODUCT_ID_AIC8800D80WN ||
+			dev->chipid == PRODUCT_ID_AIC8800D80X2)) {
 			u8_l type = (u8_l)command_strtoul(argv[2], NULL, 16);
 			u8_l chgrp = (u8_l)command_strtoul(argv[3], NULL, 16);
 			s8_l pwrofst = (s8_l)command_strtoul(argv[4], NULL, 10);
 			u8_l buf[4] = {func, type, chgrp, (u8_l)pwrofst};
 			AICWFDBG(LOGINFO, "set efuse pwrofst_%s:[%x][%x]=%d\r\n", (func == 1) ? "2.4g" : "5g", type, chgrp, pwrofst);
 			rwnx_send_rftest_req(rwnx_hw, RDWR_EFUSE_PWROFST, sizeof(buf), buf, &cfm);
-		} else if ((argc > 3) && (dev->chipid != PRODUCT_ID_AIC8800D80) && (dev->chipid != PRODUCT_ID_AIC8800D80X2)) {
+		} else if ((argc > 3) && (dev->chipid != PRODUCT_ID_AIC8800D80) &&
+			(dev->chipid != PRODUCT_ID_AIC8800D80N) &&
+			(dev->chipid != PRODUCT_ID_AIC8800D80WN) &&
+			(dev->chipid != PRODUCT_ID_AIC8800D80X2)) {
 			u8_l chgrp = (u8_l)command_strtoul(argv[2], NULL, 16);
 			s8_l pwrofst = (s8_l)command_strtoul(argv[3], NULL, 10);
 			u8_l buf[3] = {func, chgrp, (u8_l)pwrofst};
@@ -931,7 +947,9 @@ static int aic_priv_cmd_rdwr_efuse_pwrofst (struct rwnx_hw *rwnx_hw, int argc, c
 	}
 	if ((dev->chipid == PRODUCT_ID_AIC8800DC) || (dev->chipid == PRODUCT_ID_AIC8800DW)) { // 6 = 3 (2.4g) * 2
 		res_len = 3 * 2;
-	} else if (dev->chipid == PRODUCT_ID_AIC8800D80) { // 3 * 2 (2.4g) + 3 * 6 (5g)
+	} else if (dev->chipid == PRODUCT_ID_AIC8800D80 ||
+		dev->chipid == PRODUCT_ID_AIC8800D80N ||
+		dev->chipid == PRODUCT_ID_AIC8800D80WN) { // 3 * 2 (2.4g) + 3 * 6 (5g)
 		res_len = (3 * 3 + 3 * 6) * 2;
 	} else if(dev->chipid == PRODUCT_ID_AIC8800D80X2) { // 3 * 2 (2.4g) *2 + 3 * 6 (5g) *2
 		res_len = (3 * 3 + 3 * 6) * 2 * 2;
@@ -1265,7 +1283,9 @@ static int aic_priv_cmd_set_txpwr_loss(struct rwnx_hw *rwnx_hw, int argc, char *
 	if (argc > 1) {
 		func = (s8_l)command_strtoul(argv[1], NULL, 10);
 		printk("set txpwr loss: %d\n", func);
-		if (g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80){
+		if (g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80 ||
+			g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80N ||
+			g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80WN){
 			set_txpwr_loss_ofst(func);
 			rwnx_send_txpwr_lvl_v3_req(g_rwnx_plat->sdiodev->rwnx_hw);
 		}else if(g_rwnx_plat->sdiodev->chipid == PRODUCT_ID_AIC8800D80X2){
@@ -1364,7 +1384,7 @@ static int aic_priv_cmd_country_set(struct rwnx_hw *rwnx_hw, int argc,
 	ret = regulatory_set_wiphy_regd(
 		rwnx_hw->wiphy, regdomain);
 #else
-	ret = wiphy_apply_custom_regulatory(
+	wiphy_apply_custom_regulatory(
 		rwnx_hw->wiphy, regdomain);
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0) */
 
@@ -1714,8 +1734,7 @@ void set_vendor_extension_ie(char *command){
 }
 #endif//CONFIG_SET_VENDOR_EXTENSION_IE
 int rwnx_cfg80211_set_monitor_channel_(struct wiphy *wiphy,
-				       struct net_device *dev,
-				       struct cfg80211_chan_def *chandef);
+                                             struct cfg80211_chan_def *chandef);
 int rwnx_atoi2(char *value, int c_len);
 void set_mon_chan(struct rwnx_vif *vif, char *parameter){
     struct cfg80211_chan_def *chandef = NULL;
@@ -1739,7 +1758,7 @@ void set_mon_chan(struct rwnx_vif *vif, char *parameter){
     chandef->center_freq1 = chandef->chan->center_freq;
     chandef->center_freq2 = 0;
 
-    rwnx_cfg80211_set_monitor_channel_(vif->rwnx_hw->wiphy, vif->ndev, chandef);
+    rwnx_cfg80211_set_monitor_channel_(vif->rwnx_hw->wiphy, chandef);
 
     vfree(chandef->chan);
     vfree(chandef);
@@ -2153,3 +2172,4 @@ exit:
 	Sreturn ret;
 }
 #endif
+
