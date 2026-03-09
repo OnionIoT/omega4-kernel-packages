@@ -421,45 +421,6 @@ int rwnx_send_dbg_mem_write_req(struct aic_sdio_dev *sdiodev, u32 mem_addr, u32 
 	return rwnx_send_msg(sdiodev, mem_write_req, 1, DBG_MEM_WRITE_CFM, NULL);
 }
 
-extern int testmode;
-
-static bool aic_is_d80_rf_wifi_fw(const struct aic_sdio_dev *sdiodev,
-				      const char *filename)
-{
-	return (sdiodev->chipid == PRODUCT_ID_AIC8800D80) &&
-	       (testmode == FW_RFTEST_MODE) &&
-	       !strncmp(filename, "lmacfw_rf_8800d80", 17);
-}
-
-static int aic_d80_word_write_fw(struct aic_sdio_dev *sdiodev, u32 fw_addr,
-				     u32 *fw_data, u32 fw_size)
-{
-	u8 *bytes = (u8 *)fw_data;
-	u32 offset = 0;
-	int err;
-
-	while (offset + sizeof(u32) <= fw_size) {
-		u32 word;
-
-		memcpy(&word, bytes + offset, sizeof(word));
-		err = rwnx_send_dbg_mem_write_req(sdiodev, fw_addr + offset, word);
-		if (err)
-			return err;
-
-		offset += sizeof(u32);
-	}
-
-	if (offset < fw_size) {
-		err = rwnx_send_dbg_mem_block_write_req(sdiodev, fw_addr + offset,
-							fw_size - offset,
-							(u32 *)(bytes + offset));
-		if (err)
-			return err;
-	}
-
-	return 0;
-}
-
 int rwnx_send_dbg_mem_mask_write_req(struct aic_sdio_dev *sdiodev, u32 mem_addr,
 									 u32 mem_mask, u32 mem_data)
 {
@@ -701,6 +662,8 @@ int rwnx_load_firmware(u32 **fw_buf, const char *name, struct device *device)
 	return size;
 #endif
 }
+
+extern int testmode;
 
 #ifdef CONFIG_M2D_OTA_AUTO_SUPPORT
 extern char saved_sdk_ver[64];
@@ -1311,7 +1274,6 @@ int rwnx_plat_bin_fw_upload_android(struct aic_sdio_dev *sdiodev, u32 fw_addr,
 {
 	struct device *dev = sdiodev->dev;
 	unsigned int i = 0;
-	bool use_word_write = false;
 	int size;
 	u32 *dst = NULL;
 	int err = 0;
@@ -1327,16 +1289,6 @@ int rwnx_plat_bin_fw_upload_android(struct aic_sdio_dev *sdiodev, u32 fw_addr,
 #endif
 		dst = NULL;
 		return -1;
-	}
-
-	use_word_write = aic_is_d80_rf_wifi_fw(sdiodev, filename);
-	if (use_word_write) {
-		printk(KERN_INFO "aic8800: RF firmware upload using word-write path: %s (size=%d)\n",
-		       filename, size);
-		err = aic_d80_word_write_fw(sdiodev, fw_addr, dst, size);
-		if (err)
-			printk("bin upload fail: %x, err:%d\r\n", fw_addr, err);
-		goto upload_done;
 	}
 
 	/* Copy the file on the Embedded side */
@@ -1357,7 +1309,6 @@ int rwnx_plat_bin_fw_upload_android(struct aic_sdio_dev *sdiodev, u32 fw_addr,
 		}
 	}
 
-upload_done:
 	if (dst) {
 #ifndef CONFIG_FIRMWARE_ARRAY
 		vfree(dst);
