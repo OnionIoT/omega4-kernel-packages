@@ -278,7 +278,17 @@ static const struct func_desc gpio1_d5_funcs[] = {
     { "mipi_csi_d0p", 1 },
 };
 
-/* ---- GPIO2_B – 0x201A0044 ---- */
+/* ---- GPIO2_B – 0x201A0044 / 0x201A0048 ---- */
+
+static const struct func_desc gpio2_b0_funcs[] = {
+    { "gpio",        0 },
+    { "uart2_tx_m1", 1 },
+};
+
+static const struct func_desc gpio2_b1_funcs[] = {
+    { "gpio",        0 },
+    { "uart2_rx_m1", 1 },
+};
 
 static const struct func_desc gpio2_b4_funcs[] = {
     { "gpio",       0 },
@@ -592,10 +602,26 @@ static const struct pin_desc pin_table[] = {
         .evb_pin    = 30,
     },
 
-    /* GPIO2_B – 0x201A0044 */
+    /* GPIO2_B – 0x201A0044 / 0x201A0048 */
+    {
+        .name      = "gpio2_b0",
+        .addr      = 0x201A0048u,
+        .mask      = 0x0000000Fu,
+        .shift     = 0,
+        .funcs     = gpio2_b0_funcs,
+        .num_funcs = sizeof(gpio2_b0_funcs)/sizeof(gpio2_b0_funcs[0]),
+    },
+    {
+        .name      = "gpio2_b1",
+        .addr      = 0x201A0048u,
+        .mask      = 0x000000F0u,
+        .shift     = 4,
+        .funcs     = gpio2_b1_funcs,
+        .num_funcs = sizeof(gpio2_b1_funcs)/sizeof(gpio2_b1_funcs[0]),
+    },
     {
         .name      = "gpio2_b4",
-        .addr      = 0x201A0044u,
+        .addr      = 0x201A004Cu,
         .mask      = 0x0000000Fu,
         .shift     = 0,
         .funcs     = gpio2_b4_funcs,
