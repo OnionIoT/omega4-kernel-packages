@@ -1,0 +1,14 @@
+# Omega4 EVB header GPIO numbers for manufacturing GPIO output tests.
+# Keep board-control, UART, flash, and other module-only pins out of this list.
+#
+# GPIO number mapping:
+#   gpio0_ax = x
+#   gpio1_ax = 32 + x, gpio1_bx = 40 + x, gpio1_cx = 48 + x, gpio1_dx = 56 + x
+#   gpio2_b4 = 76
+
+1
+38 39
+40 41 42 43 44 45 46 47
+48 49 50 51 52 53 54
+56 57 58 59 60 61
+76

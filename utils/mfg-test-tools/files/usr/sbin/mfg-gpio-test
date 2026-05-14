@@ -1,0 +1,205 @@
+#!/bin/sh
+
+GPIO_ROOT="${GPIO_ROOT:-/sys/class/gpio}"
+GPIO_LIST_FILE="${MFG_GPIO_LIST_FILE:-/etc/mfg-test-tools/gpio-list}"
+DELAY="${MFG_GPIO_DELAY:-0}"
+KEEP_EXPORTS=0
+LIST_ONLY=0
+AUTO_DISCOVER=0
+GPIO_LIST=""
+
+usage() {
+	cat <<HELP
+Usage: mfg-gpio-test [options] [gpio ...]
+
+Drive available GPIOs high one by one, then drive all low, high, low.
+
+Options:
+  -a            Auto-discover exportable GPIOs from /sys/class/gpio/gpiochip*
+  -d <seconds>  Delay between GPIO changes (default: ${DELAY})
+  -k            Keep GPIOs exported after the test
+  -l            List selected GPIOs without driving them
+  -h            Show this help
+
+If no GPIO numbers are provided, the script uses MFG_GPIO_LIST when set, then
+${GPIO_LIST_FILE} when present. Use -a only for development because automatic
+GPIO discovery can touch pins used by board functions.
+HELP
+}
+
+log() {
+	echo "$@"
+}
+
+die() {
+	echo "mfg-gpio-test: $*" >&2
+	exit 1
+}
+
+is_number() {
+	case "$1" in
+		''|*[!0-9]*) return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
+gpio_path() {
+	echo "${GPIO_ROOT}/gpio$1"
+}
+
+gpio_export() {
+	local gpio="$1"
+	local path
+
+	path="$(gpio_path "$gpio")"
+	if [ -d "$path" ]; then
+		return 0
+	fi
+
+	echo "$gpio" > "${GPIO_ROOT}/export" 2>/dev/null || return 1
+
+	[ -d "$path" ] || return 1
+	return 0
+}
+
+gpio_unexport() {
+	local gpio="$1"
+
+	[ -d "$(gpio_path "$gpio")" ] || return 0
+	echo "$gpio" > "${GPIO_ROOT}/unexport" 2>/dev/null || true
+}
+
+gpio_set_output() {
+	local gpio="$1"
+	local path
+
+	path="$(gpio_path "$gpio")"
+	echo out > "${path}/direction" 2>/dev/null || return 1
+	return 0
+}
+
+gpio_write() {
+	local gpio="$1"
+	local value="$2"
+
+	echo "$value" > "$(gpio_path "$gpio")/value" 2>/dev/null
+}
+
+add_gpio() {
+	local gpio="$1"
+
+	is_number "$gpio" || die "invalid GPIO number: $gpio"
+	GPIO_LIST="${GPIO_LIST}${GPIO_LIST:+ }${gpio}"
+}
+
+add_gpio_list() {
+	local gpio
+
+	for gpio in $*; do
+		add_gpio "$gpio"
+	done
+}
+
+read_gpio_list_file() {
+	local line
+
+	[ -f "$GPIO_LIST_FILE" ] || return 1
+	while IFS= read -r line || [ -n "$line" ]; do
+		line="${line%%#*}"
+		add_gpio_list $line
+	done < "$GPIO_LIST_FILE"
+	return 0
+}
+
+discover_gpios() {
+	local chip base ngpio gpio end
+
+	[ -d "$GPIO_ROOT" ] || die "$GPIO_ROOT does not exist"
+	[ -e "${GPIO_ROOT}/export" ] || die "$GPIO_ROOT/export does not exist"
+
+	for chip in "${GPIO_ROOT}"/gpiochip*; do
+		[ -d "$chip" ] || continue
+		read -r base < "${chip}/base" || continue
+		read -r ngpio < "${chip}/ngpio" || continue
+		is_number "$base" || continue
+		is_number "$ngpio" || continue
+
+		gpio="$base"
+		end=$((base + ngpio))
+		while [ "$gpio" -lt "$end" ]; do
+			if gpio_export "$gpio"; then
+				if gpio_set_output "$gpio"; then
+					add_gpio "$gpio"
+				else
+					gpio_unexport "$gpio"
+				fi
+			fi
+			gpio=$((gpio + 1))
+		done
+	done
+}
+
+cleanup() {
+	local gpio
+
+	[ "$KEEP_EXPORTS" -eq 1 ] && return
+	for gpio in $GPIO_LIST; do
+		gpio_unexport "$gpio"
+	done
+}
+
+while getopts "ad:klh" opt; do
+	case "$opt" in
+		a) AUTO_DISCOVER=1 ;;
+		d) DELAY="$OPTARG" ;;
+		k) KEEP_EXPORTS=1 ;;
+		l) LIST_ONLY=1 ;;
+		h) usage; exit 0 ;;
+		*) usage >&2; exit 1 ;;
+	esac
+done
+shift $((OPTIND - 1))
+
+if [ "$#" -gt 0 ]; then
+	for gpio in "$@"; do
+		add_gpio "$gpio"
+	done
+elif [ -n "${MFG_GPIO_LIST:-}" ]; then
+	add_gpio_list $MFG_GPIO_LIST
+elif [ "$AUTO_DISCOVER" -eq 1 ]; then
+	discover_gpios
+elif read_gpio_list_file; then
+	:
+else
+	die "no GPIO list provided; set MFG_GPIO_LIST, create $GPIO_LIST_FILE, pass GPIO args, or use -a"
+fi
+
+[ -n "$GPIO_LIST" ] || die "no available GPIOs found"
+
+if [ "$LIST_ONLY" -eq 1 ]; then
+	echo "$GPIO_LIST"
+	cleanup
+	exit 0
+fi
+
+trap cleanup EXIT INT TERM
+
+for gpio in $GPIO_LIST; do
+	if gpio_export "$gpio" && gpio_set_output "$gpio"; then
+		log "GPIO ${gpio}: 1"
+		gpio_write "$gpio" 1 || die "failed to write GPIO $gpio"
+		sleep "$DELAY"
+	else
+		die "failed to prepare GPIO $gpio"
+	fi
+done
+
+for value in 0 1 0; do
+	log "all GPIOs: ${value}"
+	for gpio in $GPIO_LIST; do
+		gpio_write "$gpio" "$value" || die "failed to write GPIO $gpio"
+	done
+	sleep "$DELAY"
+done
+
+log "done"
