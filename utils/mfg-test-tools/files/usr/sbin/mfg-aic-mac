@@ -1,0 +1,262 @@
+#!/bin/sh
+
+UART_TEST_FW="${MFG_AIC_UART_TEST_FW:-/usr/share/mfg-test-tools/aic8800d80-mfg-testmode-uart.bin}"
+UART_HELPER="${MFG_AIC_UART_HELPER:-mfg-aic-uart}"
+PINMUX_HELPER="${MFG_AIC_PINMUX_HELPER:-omega4-pinmux}"
+UART_DEV="${MFG_AIC_UART_DEV:-/dev/ttyS2}"
+UART_BAUD="${MFG_AIC_UART_BAUD:-921600}"
+UART_ADDR="${MFG_AIC_UART_ADDR:-160000}"
+UART_RESET_GPIO="${MFG_AIC_RESET_GPIO:-3}"
+YES=0
+
+die() {
+	echo "mfg-aic-mac: $*" >&2
+	exit 1
+}
+
+usage() {
+	cat <<'EOF'
+Usage:
+  mfg-aic-mac load [--fw PATH] [--dev DEV] [--addr ADDR]
+  mfg-aic-mac show [--dev DEV]
+  mfg-aic-mac set --mac MAC --yes [--dev DEV]
+
+MAC is the WiFi/base address. BT is programmed as base + 2.
+MAC may be plain hex, colon-separated, or dash-separated. --wifi is accepted
+as an alias for --mac.
+
+Examples:
+  mfg-aic-mac load --fw /tmp/testmode.bin
+  mfg-aic-mac show
+  mfg-aic-mac set --mac 0a:1c:11:22:33:44 --yes
+EOF
+}
+
+normalize_mac() {
+	local mac first
+
+	mac="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '.:-')"
+	case "$mac" in
+		????????????) ;;
+		*) return 1 ;;
+	esac
+	case "$mac" in
+		*[!0123456789abcdef]*) return 1 ;;
+	esac
+	case "$mac" in
+		000000000000|ffffffffffff) return 1 ;;
+	esac
+
+	first="$(printf '%s' "$mac" | cut -c1-2)"
+	if [ $((0x$first & 1)) -ne 0 ]; then
+		return 1
+	fi
+
+	printf '%s\n' "$mac"
+}
+
+mac_display() {
+	printf '%s:%s:%s:%s:%s:%s\n' \
+		"$(printf '%s' "$1" | cut -c1-2)" \
+		"$(printf '%s' "$1" | cut -c3-4)" \
+		"$(printf '%s' "$1" | cut -c5-6)" \
+		"$(printf '%s' "$1" | cut -c7-8)" \
+		"$(printf '%s' "$1" | cut -c9-10)" \
+		"$(printf '%s' "$1" | cut -c11-12)"
+}
+
+mac_add() {
+	local mac inc value
+
+	mac="$1"
+	inc="$2"
+	value=$((0x$mac + inc))
+	[ "$value" -le $((0xffffffffffff)) ] || return 1
+	printf '%012x\n' "$value"
+}
+
+parse_uart_mac() {
+	sed -n 's/.*get_.*mac_addr:\([0-9a-fA-F]\{12\}\).*/\1/p' | head -n 1 | tr '[:upper:]' '[:lower:]'
+}
+
+require_uart_tool() {
+	command -v "$UART_HELPER" >/dev/null 2>&1 || die "$UART_HELPER not found"
+	[ -c "$UART_DEV" ] || die "$UART_DEV not found"
+}
+
+runtime_mux_uart2() {
+	command -v "$PINMUX_HELPER" >/dev/null 2>&1 || die "$PINMUX_HELPER not found"
+
+	"$PINMUX_HELPER" gpio2_b0 uart2_tx_m1 >/dev/null || die "failed to mux gpio2_b0 to uart2_tx_m1"
+	"$PINMUX_HELPER" gpio2_b1 uart2_rx_m1 >/dev/null || die "failed to mux gpio2_b1 to uart2_rx_m1"
+}
+
+uart_cmd() {
+	"$UART_HELPER" probe -d "$UART_DEV" -b "$UART_BAUD" -t 5000 "$@"
+}
+
+uart_detach_sdio() {
+	ifconfig wlan0 down >/dev/null 2>&1 || true
+	rmmod aic8800_fdrv >/dev/null 2>&1 || true
+	rmmod aic8800_bsp >/dev/null 2>&1 || true
+	echo 20650000.mmc >/sys/bus/platform/drivers/dwmmc_rockchip/unbind 2>/dev/null || true
+	echo sdio-pwrseq >/sys/bus/platform/drivers/pwrseq_simple/unbind 2>/dev/null || true
+}
+
+uart_reset_to_bootrom() {
+	local gpio_dir
+
+	gpio_dir="/sys/class/gpio/gpio$UART_RESET_GPIO"
+	[ -d "$gpio_dir" ] || echo "$UART_RESET_GPIO" >/sys/class/gpio/export 2>/dev/null || true
+	[ -d "$gpio_dir" ] || die "could not export reset GPIO $UART_RESET_GPIO"
+
+	echo out >"$gpio_dir/direction"
+	echo 0 >"$gpio_dir/value"
+	sleep 1
+	echo 1 >"$gpio_dir/value"
+	sleep 1
+}
+
+uart_load_fw() {
+	require_uart_tool
+	[ -r "$UART_TEST_FW" ] || die "UART test firmware not found: $UART_TEST_FW"
+
+	runtime_mux_uart2
+	uart_detach_sdio
+	uart_reset_to_bootrom
+	"$UART_HELPER" load -d "$UART_DEV" -b "$UART_BAUD" -a "$UART_ADDR" "$UART_TEST_FW"
+}
+
+uart_get_one() {
+	local kind cmd out mac
+	local try
+
+	kind="$1"
+	cmd="$2"
+
+	for try in 1 2 3 4 5; do
+		out="$(uart_cmd "$cmd")" || {
+			printf '%s\n' "$out" >&2
+			die "$kind MAC UART read failed"
+		}
+		printf '%s\n' "$out"
+		mac="$(printf '%s\n' "$out" | parse_uart_mac)"
+		[ -n "$mac" ] && break
+		sleep 1
+	done
+	[ -n "$mac" ] || die "could not parse $kind MAC from UART $cmd output"
+	printf '%s %s\n' "$kind" "$(mac_display "$mac")"
+}
+
+uart_set_one() {
+	local kind set_cmd get_cmd mac out after
+
+	kind="$1"
+	set_cmd="$2"
+	get_cmd="$3"
+	mac="$4"
+
+	echo "program $kind MAC over UART: $(mac_display "$mac")"
+	out="$(uart_cmd "$set_cmd $mac")" || {
+		printf '%s\n' "$out" >&2
+		die "$kind MAC UART program failed"
+	}
+	printf '%s\n' "$out"
+
+	out="$(uart_cmd "$get_cmd")" || {
+		printf '%s\n' "$out" >&2
+		die "$kind MAC UART verify failed"
+	}
+	printf '%s\n' "$out"
+	after="$(printf '%s\n' "$out" | parse_uart_mac)"
+	[ "$after" = "$mac" ] || die "$kind MAC verify failed: expected $(mac_display "$mac"), got $(mac_display "$after")"
+	echo "$kind MAC verified: $(mac_display "$after")"
+}
+
+cmd="$1"
+[ -n "$cmd" ] || {
+	usage
+	exit 1
+}
+shift
+
+base_mac=""
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--mac|--wifi)
+			[ "$#" -ge 2 ] || die "$1 requires an argument"
+			base_mac="$(normalize_mac "$2")" || die "invalid base MAC: $2"
+			shift 2
+			;;
+		--bt)
+			die "--bt is no longer accepted; BT is derived as base MAC + 2"
+			;;
+		--fw)
+			[ "$#" -ge 2 ] || die "$1 requires an argument"
+			UART_TEST_FW="$2"
+			shift 2
+			;;
+		--dev)
+			[ "$#" -ge 2 ] || die "$1 requires an argument"
+			UART_DEV="$2"
+			shift 2
+			;;
+		--baud)
+			[ "$#" -ge 2 ] || die "$1 requires an argument"
+			UART_BAUD="$2"
+			shift 2
+			;;
+		--addr)
+			[ "$#" -ge 2 ] || die "$1 requires an argument"
+			UART_ADDR="$2"
+			shift 2
+			;;
+		--reset-gpio)
+			[ "$#" -ge 2 ] || die "$1 requires an argument"
+			UART_RESET_GPIO="$2"
+			shift 2
+			;;
+		--yes)
+			YES=1
+			shift
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			die "unknown option: $1"
+			;;
+	esac
+done
+
+case "$cmd" in
+	load|uart-load)
+		uart_load_fw
+		;;
+	show|uart-show)
+		require_uart_tool
+		runtime_mux_uart2
+		uart_get_one "wifi" getmac
+		uart_get_one "bt" getbtmac
+		;;
+	set|uart-set)
+		[ -n "$base_mac" ] || die "--mac is required"
+		bt_mac="$(mac_add "$base_mac" 2)" || die "base MAC too high to derive BT as +2"
+		normalize_mac "$bt_mac" >/dev/null || die "derived BT MAC is invalid: $(mac_display "$bt_mac")"
+		[ "$YES" -eq 1 ] || die "refusing to program without --yes"
+		require_uart_tool
+		runtime_mux_uart2
+		echo "wifi MAC: $(mac_display "$base_mac")"
+		echo "bt MAC:   $(mac_display "$bt_mac")"
+		uart_set_one "wifi" setmac getmac "$base_mac"
+		uart_set_one "bt" setbtmac getbtmac "$bt_mac"
+		;;
+	-h|--help)
+		usage
+		;;
+	*)
+		die "unknown command: $cmd"
+		;;
+esac
