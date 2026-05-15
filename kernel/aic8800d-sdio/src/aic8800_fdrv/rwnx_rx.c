@@ -2282,6 +2282,7 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
         struct hw_rxhdr hw_rxhdr_copy;
         u8 rtap_len;
         u16 frm_len = 0;
+        bool forward_frame = status & RX_STAT_FORWARD;
 
         //Check if monitor interface exists and is open
         rwnx_vif = rwnx_rx_get_vif(rwnx_hw, rwnx_hw->monitor_vif);
@@ -2295,7 +2296,7 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
                                &hw_rxhdr->hwvect.rx_vect2);
         rtap_len = rwnx_rx_rtap_hdrlen(&hw_rxhdr->hwvect.rx_vect1, false);
 
-        if (status == RX_STAT_MONITOR) 
+        if (status & RX_STAT_MONITOR) 
         {
             /* Remove the SK buffer from the rxbuf_elems table. It will also
                unmap the buffer and then sync the buffer for the cpu */
@@ -2305,11 +2306,10 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
             //Save frame length
             frm_len = le32_to_cpu(hw_rxhdr->hwvect.len);
 
-            // Reserve space for frame
-            skb->len = frm_len;
-
-            //Check if there is enough space to add the radiotap header
-            if (skb_headroom(skb) > rtap_len) {
+            //Check if there is enough space to add the radiotap header.
+            //If the frame also needs normal forwarding, keep the original skb
+            //untouched and feed a copy to the monitor interface.
+            if (!forward_frame && skb_headroom(skb) > rtap_len) {
 
                 skb_monitor = skb;
 
@@ -2323,10 +2323,14 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
 
                 //Reset original skb->data pointer
                 skb->data = (void*) hw_rxhdr;
+                if (!skb_monitor)
+                    goto check_len_update;
             }
         } else {
     #ifdef CONFIG_RWNX_MON_DATA
         skb_monitor = skb_copy_expand(skb, rtap_len, 0, GFP_ATOMIC);
+        if (!skb_monitor)
+            goto check_len_update;
         skb_monitor->data += (msdu_offset + 2); //sdio/usb word allign
 
         //Save frame length
@@ -2341,7 +2345,7 @@ u8 rwnx_rxdataind_aicwf(struct rwnx_hw *rwnx_hw, void *hostid, void *rx_priv)
         if (rwnx_rx_monitor(rwnx_hw, rwnx_vif, skb_monitor, hw_rxhdr, rtap_len))
             dev_kfree_skb(skb_monitor);
 
-        if (status == RX_STAT_MONITOR) {
+        if ((status & RX_STAT_MONITOR) && !forward_frame) {
             if (skb_monitor != skb) {
                 dev_kfree_skb(skb);
             }
@@ -2835,4 +2839,3 @@ check_len_update:
 end:
 	return 0;
 }
-
