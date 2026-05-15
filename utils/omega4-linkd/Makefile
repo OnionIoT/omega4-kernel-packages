@@ -18,7 +18,8 @@ endef
 define Package/omega4-linkd/description
  Minimal OpenHD-style raw monitor-mode link tool for Omega4 bring-up.
  It supports UDP-to-802.11 injection, 802.11-to-UDP receive, and a ping
- payload mode for basic RF transport validation.
+ payload mode for basic RF transport validation. It also installs a small
+ transparent MAVLink serial/UDP bridge for the telemetry layer.
 endef
 
 define Build/Prepare
@@ -36,6 +37,7 @@ endef
 define Package/omega4-linkd/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/omega4-linkd $(1)/usr/sbin/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/omega4-mavlinkd $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/omega4-link $(1)/etc/init.d/
 	$(INSTALL_DIR) $(1)/etc/config

@@ -32,6 +32,7 @@
 #define O4L_DEFAULT_HT_MODE "HT20"
 #define O4L_DEFAULT_UDP_LISTEN 5601
 #define O4L_DEFAULT_UDP_DEST_PORT 5602
+#define IEEE80211_FTYPE_MGMT_ACTION 0x00d0
 
 enum stream_id {
 	STREAM_VIDEO = 1,
@@ -79,6 +80,7 @@ struct config {
 	uint16_t udp_dest_port;
 	uint8_t stream_id;
 	int interval_ms;
+	int count;
 	bool setup_wifi;
 	bool verbose;
 };
@@ -141,6 +143,7 @@ static void usage(FILE *out)
 		"  --udp-dest HOST:PORT     UDP output for rx mode (default 127.0.0.1:%d)\n"
 		"  --stream ID              Stream id, 1 video, 2 mav a2g, 3 mav g2a, 4 control\n"
 		"  --interval-ms MS         Ping interval (default 1000)\n"
+		"  --count N                Stop ping mode after N packets (default unlimited)\n"
 		"  --verbose                Print each accepted packet\n",
 		O4L_DEFAULT_IFACE, O4L_DEFAULT_FREQ_MHZ, O4L_DEFAULT_HT_MODE,
 		O4L_DEFAULT_UDP_LISTEN, O4L_DEFAULT_UDP_DEST_PORT);
@@ -277,7 +280,7 @@ static size_t build_frame(uint8_t *frame, uint8_t stream_id, uint32_t sequence,
 	rt->present = htole32(0);
 
 	memset(wifi, 0, sizeof(*wifi));
-	wifi->frame_control = htole16(0x00d0);
+	wifi->frame_control = htole16(IEEE80211_FTYPE_MGMT_ACTION);
 	memcpy(wifi->addr1, addr_broadcast, sizeof(addr_broadcast));
 	memcpy(wifi->addr2, addr_src, sizeof(addr_src));
 	memcpy(wifi->addr3, addr_bssid, sizeof(addr_bssid));
@@ -418,7 +421,7 @@ static int ping_loop(int raw_fd, const struct config *cfg)
 
 	fprintf(stderr, "ping: iface=%s interval-ms=%d stream=%u\n",
 		cfg->iface, cfg->interval_ms, cfg->stream_id);
-	while (!g_stop) {
+	while (!g_stop && (cfg->count <= 0 || (int)sequence < cfg->count)) {
 		char payload[96];
 		int len = snprintf(payload, sizeof(payload), "omega4-link ping seq=%u t=%llu",
 				   sequence, (unsigned long long)monotonic_us());
@@ -553,6 +556,10 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 		} else if (!strcmp(argv[i], "--interval-ms") && i + 1 < argc) {
 			cfg->interval_ms = atoi(argv[++i]);
 			if (cfg->interval_ms <= 0)
+				return -1;
+		} else if (!strcmp(argv[i], "--count") && i + 1 < argc) {
+			cfg->count = atoi(argv[++i]);
+			if (cfg->count < 0)
 				return -1;
 		} else if (!strcmp(argv[i], "--verbose")) {
 			cfg->verbose = true;
