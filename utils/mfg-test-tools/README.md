@@ -14,6 +14,7 @@ Install path on target:
 
 ```sh
 /usr/sbin/mfg-gpio-test
+/usr/sbin/mfg-camera-test
 /usr/sbin/mfg-aic-mac
 /usr/sbin/mfg-aic-uart
 /usr/share/mfg-test-tools/aic8800d80-mfg-testmode-uart.bin
@@ -38,6 +39,37 @@ mfg-gpio-test -a -l        # development only: scan exportable GPIOs
 
 For production fixtures, update `/etc/mfg-test-tools/gpio-list` or pass
 explicit GPIO arguments so only fixture-safe pins are driven.
+
+## Camera Test
+
+`mfg-camera-test` validates a capture-capable V4L2 video node by streaming
+frames and checking the raw byte content. By default it prefers the Rockchip ISP
+main path, for example `rkisp_mainpath`, instead of raw CIF nodes. It rejects
+all-zero, all-0xff, underexposed, overexposed, flat, and non-changing captures.
+
+```sh
+mfg-camera-test
+mfg-camera-test -v
+mfg-camera-test -d /dev/video0 -n 10
+```
+
+The output is one factory-friendly result line:
+
+```text
+PASS camera device=/dev/video0 frames=5 bytes=4608000 mean=74.12 variance=812.34 min=2 max=245 zero=0.01% ff=0.00% delta=3.1420%
+FAIL no_capture_device
+FAIL capture_timeout
+FAIL flat_frame device=/dev/video0 variance=0.50 min_variance=4.00
+```
+
+Thresholds can be adjusted for a specific fixture:
+
+```sh
+mfg-camera-test --min-mean 5 --max-mean 245 --min-variance 8 --min-delta 0.02
+```
+
+The tool uses V4L2 ioctls directly and does not require `v4l2-ctl` or
+`media-ctl`.
 
 ## AIC WiFi/BT MAC Programming
 
