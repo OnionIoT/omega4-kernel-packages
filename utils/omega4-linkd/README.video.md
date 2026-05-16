@@ -1,0 +1,63 @@
+# Omega4 Video Link
+
+`omega4-videod` is the first video-layer helper for the Omega4 OpenHD-style
+link. It uses RF stream `1` and keeps video as RTP/UDP packets so the raw link
+does not need to understand codecs yet.
+
+## Air Unit
+
+Forward an external RTP/UDP video source into the RF link:
+
+```sh
+omega4-videod --role air --setup --freq 5180 --ht-mode HT20 --udp-listen 5601
+```
+
+An encoder or camera-side process should send RTP packets to
+`127.0.0.1:5601`.
+
+Pull an RTSP camera directly with GStreamer:
+
+```sh
+omega4-videod --role air --setup --freq 5180 --ht-mode HT20 \
+	--rtsp-url rtsp://192.168.1.10/stream1
+```
+
+The RTSP mode forwards the camera RTP packets into `omega4-linkd`; it does not
+decode or re-encode video. RTSP input requires `gst-launch-1.0` plus the RTSP,
+RTP, RTP manager, and UDP GStreamer plugins in the image. The base
+`omega4-videod` package does not depend on GStreamer so plain RTP/UDP forwarding
+can stay small.
+
+## Ground Unit
+
+Receive RF stream `1` and emit RTP/UDP:
+
+```sh
+omega4-videod --role ground --setup --freq 5180 --ht-mode HT20 \
+	--udp-dest 192.168.1.100:5600
+```
+
+Point VLC, QGroundControl, or another RTP-capable receiver at UDP/RTP port
+`5600` on the destination host.
+
+## UCI
+
+The package adds disabled `omega4-video` sections to `/etc/config/omega4-link`:
+
+- `video_air`
+- `video_ground`
+
+Enable one side at a time with:
+
+```sh
+uci set omega4-link.video_air.enabled='1'
+uci commit omega4-link
+/etc/init.d/omega4-link restart
+```
+
+## Current Limits
+
+- No FEC yet.
+- No adaptive bitrate yet.
+- No RTP payload repair or jitter buffer on the Omega4 side.
+- Link quality is currently measured by packet counters from `omega4-linkd`.

@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=omega4-linkd
 PKG_VERSION:=0.1
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
 
@@ -20,6 +20,20 @@ define Package/omega4-linkd/description
  It supports UDP-to-802.11 injection, 802.11-to-UDP receive, and a ping
  payload mode for basic RF transport validation. It also installs a small
  transparent MAVLink serial/UDP bridge for the telemetry layer.
+endef
+
+define Package/omega4-videod
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Omega4 RTP/RTSP video link helper
+  DEPENDS:=+omega4-linkd
+endef
+
+define Package/omega4-videod/description
+ Lightweight video helper for the Omega4 raw monitor-mode link. It can
+ forward an existing RTP/UDP source over RF stream 1, or optionally use
+ GStreamer to pull an RTSP camera and feed camera RTP packets into omega4-linkd.
+ The ground side emits RTP/UDP for a player such as VLC or QGroundControl.
 endef
 
 define Build/Prepare
@@ -44,4 +58,10 @@ define Package/omega4-linkd/install
 	$(INSTALL_CONF) ./files/etc/config/omega4-link $(1)/etc/config/
 endef
 
+define Package/omega4-videod/install
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_BIN) ./files/usr/sbin/omega4-videod $(1)/usr/sbin/
+endef
+
 $(eval $(call BuildPackage,omega4-linkd))
+$(eval $(call BuildPackage,omega4-videod))

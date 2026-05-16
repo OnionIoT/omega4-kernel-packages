@@ -1,0 +1,166 @@
+#!/bin/sh
+
+ROLE=ground
+IFACE=wlan0
+SETUP=0
+FREQ=5180
+HT_MODE=HT20
+STREAM=1
+UDP_LISTEN=5601
+UDP_DEST=127.0.0.1:5600
+RTSP_URL=
+RTSP_LATENCY=50
+RTSP_PROTOCOLS=tcp
+VERBOSE=0
+
+usage() {
+	cat <<EOF
+usage: omega4-videod --role air|ground [options]
+
+options:
+  --iface IFACE             Wi-Fi interface (default wlan0)
+  --setup                   Put interface in monitor mode and set frequency
+  --freq MHZ                Frequency for --setup (default 5180)
+  --ht-mode MODE            HT mode for --setup (default HT20)
+  --stream ID               RF stream id (default 1)
+  --udp-listen PORT         Air-side RTP/UDP input to RF (default 5601)
+  --udp-dest HOST:PORT      Ground-side RTP/UDP output (default 127.0.0.1:5600)
+  --rtsp-url URL            Air-side RTSP camera input; omit for external RTP/UDP
+  --rtsp-latency MS         GStreamer rtspsrc latency (default 50)
+  --rtsp-protocols FLAGS    GStreamer rtspsrc protocols, e.g. tcp or udp
+  --verbose                 Enable omega4-linkd verbose logging
+EOF
+}
+
+die() {
+	echo "omega4-videod: $*" >&2
+	exit 1
+}
+
+parse_host_port() {
+	case "$1" in
+		*:[0-9]*) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		-h|--help)
+			usage
+			exit 0
+			;;
+		--role)
+			[ "$#" -ge 2 ] || die "missing --role value"
+			ROLE="$2"
+			shift 2
+			;;
+		--iface)
+			[ "$#" -ge 2 ] || die "missing --iface value"
+			IFACE="$2"
+			shift 2
+			;;
+		--setup)
+			SETUP=1
+			shift
+			;;
+		--freq)
+			[ "$#" -ge 2 ] || die "missing --freq value"
+			FREQ="$2"
+			shift 2
+			;;
+		--ht-mode)
+			[ "$#" -ge 2 ] || die "missing --ht-mode value"
+			HT_MODE="$2"
+			shift 2
+			;;
+		--stream)
+			[ "$#" -ge 2 ] || die "missing --stream value"
+			STREAM="$2"
+			shift 2
+			;;
+		--udp-listen)
+			[ "$#" -ge 2 ] || die "missing --udp-listen value"
+			UDP_LISTEN="$2"
+			shift 2
+			;;
+		--udp-dest)
+			[ "$#" -ge 2 ] || die "missing --udp-dest value"
+			UDP_DEST="$2"
+			shift 2
+			;;
+		--rtsp-url)
+			[ "$#" -ge 2 ] || die "missing --rtsp-url value"
+			RTSP_URL="$2"
+			shift 2
+			;;
+		--rtsp-latency)
+			[ "$#" -ge 2 ] || die "missing --rtsp-latency value"
+			RTSP_LATENCY="$2"
+			shift 2
+			;;
+		--rtsp-protocols)
+			[ "$#" -ge 2 ] || die "missing --rtsp-protocols value"
+			RTSP_PROTOCOLS="$2"
+			shift 2
+			;;
+		--verbose)
+			VERBOSE=1
+			shift
+			;;
+		*)
+			die "unknown option: $1"
+			;;
+	esac
+done
+
+case "$ROLE" in
+	air|ground) ;;
+	*) die "--role must be air or ground" ;;
+esac
+
+case "$UDP_LISTEN" in
+	*[!0-9]*|'') die "invalid --udp-listen: $UDP_LISTEN" ;;
+esac
+
+parse_host_port "$UDP_DEST" || die "invalid --udp-dest: $UDP_DEST"
+
+LINK_ARGS="--iface $IFACE --freq $FREQ --ht-mode $HT_MODE --stream $STREAM"
+[ "$SETUP" -eq 1 ] && LINK_ARGS="$LINK_ARGS --setup"
+[ "$VERBOSE" -eq 1 ] && LINK_ARGS="$LINK_ARGS --verbose"
+
+cleanup() {
+	[ -n "$LINK_PID" ] && kill "$LINK_PID" 2>/dev/null
+	[ -n "$GST_PID" ] && kill "$GST_PID" 2>/dev/null
+	wait 2>/dev/null
+}
+
+trap 'cleanup; exit 0' INT TERM
+trap cleanup EXIT
+
+if [ "$ROLE" = ground ]; then
+	exec omega4-linkd --mode rx $LINK_ARGS --udp-dest "$UDP_DEST"
+fi
+
+omega4-linkd --mode tx $LINK_ARGS --udp-listen "$UDP_LISTEN" &
+LINK_PID=$!
+
+if [ -z "$RTSP_URL" ]; then
+	wait "$LINK_PID"
+	exit $?
+fi
+
+command -v gst-launch-1.0 >/dev/null 2>&1 || die "gst-launch-1.0 is required for --rtsp-url"
+
+sleep 1
+gst-launch-1.0 -q \
+	rtspsrc location="$RTSP_URL" latency="$RTSP_LATENCY" protocols="$RTSP_PROTOCOLS" name=src \
+	src. ! application/x-rtp,media=video ! queue max-size-time=200000000 leaky=downstream ! \
+	udpsink host=127.0.0.1 port="$UDP_LISTEN" sync=false async=false &
+GST_PID=$!
+
+while :; do
+	kill -0 "$LINK_PID" 2>/dev/null || exit 1
+	kill -0 "$GST_PID" 2>/dev/null || exit 1
+	sleep 1
+done
