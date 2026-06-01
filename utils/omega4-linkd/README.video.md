@@ -9,7 +9,8 @@ does not need to understand codecs yet.
 Forward an external RTP/UDP video source into the RF link:
 
 ```sh
-omega4-videod --role air --setup --freq 5180 --ht-mode HT20 --udp-listen 5601
+omega4-videod --role air --setup --freq 5180 --ht-mode HT20 \
+	--udp-listen 5601 --fec 8:1
 ```
 
 An encoder or camera-side process should send RTP packets to
@@ -34,7 +35,7 @@ Receive RF stream `1` and emit RTP/UDP:
 
 ```sh
 omega4-videod --role ground --setup --freq 5180 --ht-mode HT20 \
-	--udp-dest 192.168.1.100:5600
+	--udp-dest 192.168.1.100:5600 --fec 8:1
 ```
 
 Point VLC, QGroundControl, or another RTP-capable receiver at UDP/RTP port
@@ -57,7 +58,12 @@ uci commit omega4-link
 
 ## Current Limits
 
-- No FEC yet.
+- FEC is an optional XOR block code enabled with `--fec DATA:PARITY`; only
+  `PARITY=1` is supported for now. For example, `--fec 8:1` sends one recovery
+  packet for every eight data packets and can repair one lost RF packet per
+  block.
 - No adaptive bitrate yet.
-- No RTP payload repair or jitter buffer on the Omega4 side.
+- No RTP-aware jitter buffer on the Omega4 side. Recovered packets are emitted
+  when the parity packet arrives, so downstream players should tolerate minor
+  packet reordering.
 - Link quality is currently measured by packet counters from `omega4-linkd`.

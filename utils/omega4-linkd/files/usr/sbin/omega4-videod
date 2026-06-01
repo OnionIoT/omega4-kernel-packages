@@ -8,6 +8,7 @@ HT_MODE=HT20
 STREAM=1
 UDP_LISTEN=5601
 UDP_DEST=127.0.0.1:5600
+FEC=
 RTSP_URL=
 RTSP_LATENCY=50
 RTSP_PROTOCOLS=tcp
@@ -25,6 +26,7 @@ options:
   --stream ID               RF stream id (default 1)
   --udp-listen PORT         Air-side RTP/UDP input to RF (default 5601)
   --udp-dest HOST:PORT      Ground-side RTP/UDP output (default 127.0.0.1:5600)
+  --fec DATA:PARITY         Enable omega4-linkd XOR FEC, e.g. 8:1
   --rtsp-url URL            Air-side RTSP camera input; omit for external RTP/UDP
   --rtsp-latency MS         GStreamer rtspsrc latency (default 50)
   --rtsp-protocols FLAGS    GStreamer rtspsrc protocols, e.g. tcp or udp
@@ -89,6 +91,11 @@ while [ "$#" -gt 0 ]; do
 			UDP_DEST="$2"
 			shift 2
 			;;
+		--fec)
+			[ "$#" -ge 2 ] || die "missing --fec value"
+			FEC="$2"
+			shift 2
+			;;
 		--rtsp-url)
 			[ "$#" -ge 2 ] || die "missing --rtsp-url value"
 			RTSP_URL="$2"
@@ -124,10 +131,15 @@ case "$UDP_LISTEN" in
 esac
 
 parse_host_port "$UDP_DEST" || die "invalid --udp-dest: $UDP_DEST"
+case "$FEC" in
+	''|[1-9]*:[1-9]*) ;;
+	*) die "invalid --fec: $FEC" ;;
+esac
 
 LINK_ARGS="--iface $IFACE --freq $FREQ --ht-mode $HT_MODE --stream $STREAM"
 [ "$SETUP" -eq 1 ] && LINK_ARGS="$LINK_ARGS --setup"
 [ "$VERBOSE" -eq 1 ] && LINK_ARGS="$LINK_ARGS --verbose"
+[ -n "$FEC" ] && LINK_ARGS="$LINK_ARGS --fec $FEC"
 
 cleanup() {
 	[ -n "$LINK_PID" ] && kill "$LINK_PID" 2>/dev/null
