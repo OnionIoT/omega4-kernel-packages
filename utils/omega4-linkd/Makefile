@@ -52,6 +52,9 @@ define Package/omega4-linkd/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/omega4-linkd $(1)/usr/sbin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/omega4-mavlinkd $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/usr/share/doc/omega4-linkd
+	$(INSTALL_DATA) ./README.link.md $(1)/usr/share/doc/omega4-linkd/
+	$(INSTALL_DATA) ./README.telemetry.md $(1)/usr/share/doc/omega4-linkd/
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/etc/init.d/omega4-link $(1)/etc/init.d/
 	$(INSTALL_DIR) $(1)/etc/config
@@ -61,6 +64,8 @@ endef
 define Package/omega4-videod/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/omega4-videod $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/usr/share/doc/omega4-videod
+	$(INSTALL_DATA) ./README.video.md $(1)/usr/share/doc/omega4-videod/
 endef
 
 $(eval $(call BuildPackage,omega4-linkd))
