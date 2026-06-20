@@ -1,0 +1,58 @@
+#!/bin/sh /etc/rc.common
+
+START=95
+STOP=20
+EXTRA_COMMANDS="status"
+EXTRA_HELP="	status	Check service status"
+
+AIQ_BIN=/usr/bin/rkaiq_3A_server
+AIQ_LIBDIR=/usr/lib/rkaiq-uclibc
+AIQ_IQ_JSON=/etc/iqfiles/sc3336_SC3336_default.json
+AIQ_IQ_BIN=/etc/iqfiles/sc3336_SC3336_default.bin
+PIDFILE=/var/run/rkaiq.pid
+
+wait_for_isp() {
+	local timeout=20
+
+	while [ "$timeout" -gt 0 ]; do
+		if [ -e /dev/media1 ] && \
+		   [ -e /dev/video7 ] && \
+		   [ -e /dev/video13 ] && \
+		   [ -e /dev/video14 ] && \
+		   [ -e /dev/v4l-subdev3 ]; then
+			return 0
+		fi
+		sleep 1
+		timeout=$((timeout - 1))
+	done
+
+	logger -t rkaiq "ISP media graph did not become ready"
+	return 1
+}
+
+preflight() {
+	[ -x "$AIQ_BIN" ] || { logger -t rkaiq "missing $AIQ_BIN"; return 1; }
+	[ -x /lib/ld-uClibc.so.0 ] || { logger -t rkaiq "missing /lib/ld-uClibc.so.0"; return 1; }
+	[ -d "$AIQ_LIBDIR" ] || { logger -t rkaiq "missing $AIQ_LIBDIR"; return 1; }
+	[ -f "$AIQ_IQ_JSON" ] || { logger -t rkaiq "missing $AIQ_IQ_JSON"; return 1; }
+	[ -f "$AIQ_IQ_BIN" ] || { logger -t rkaiq "missing $AIQ_IQ_BIN"; return 1; }
+	wait_for_isp
+}
+
+start() {
+	preflight || return 1
+	pidof rkaiq_3A_server >/dev/null && return 0
+	mkdir -p /var/run
+	start-stop-daemon -S -b -m -p "$PIDFILE" \
+		-x /bin/sh -- -c "LD_LIBRARY_PATH=$AIQ_LIBDIR exec $AIQ_BIN --silent >/tmp/rkaiq.log 2>&1"
+}
+
+stop() {
+	start-stop-daemon -K -p "$PIDFILE" 2>/dev/null
+	killall rkaiq_3A_server 2>/dev/null
+	rm -f "$PIDFILE"
+}
+
+status() {
+	pidof rkaiq_3A_server >/dev/null
+}

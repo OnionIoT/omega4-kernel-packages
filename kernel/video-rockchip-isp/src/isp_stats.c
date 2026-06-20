@@ -5,6 +5,7 @@
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-core.h>
+#include <media/videobuf2-dma-contig.h>
 #include <media/videobuf2-dma-sg.h>
 #include <media/videobuf2-vmalloc.h>	/* for ISP statistics */
 #include "dev.h"
@@ -156,9 +157,15 @@ static void rkisp_stats_vb2_buf_queue(struct vb2_buffer *vb)
 
 	stats_buf->vaddr[0] = vb2_plane_vaddr(vb, 0);
 	if (dev->isp_ver == ISP_V32 || dev->isp_ver == ISP_V39 || dev->isp_ver == ISP_V33) {
-		struct sg_table *sgt = vb2_dma_sg_plane_desc(vb, 0);
+		if (dev->hw_dev->is_dma_contig) {
+			stats_buf->buff_addr[0] =
+				vb2_dma_contig_plane_dma_addr(vb, 0);
+		} else {
+			struct sg_table *sgt = vb2_dma_sg_plane_desc(vb, 0);
 
-		stats_buf->buff_addr[0] = sg_dma_address(sgt->sgl);
+			if (sgt && sgt->sgl)
+				stats_buf->buff_addr[0] = sg_dma_address(sgt->sgl);
+		}
 	}
 	if (stats_buf->vaddr[0]) {
 		memset(stats_buf->vaddr[0], 0, size);
@@ -482,4 +489,3 @@ void rkisp_unregister_stats_vdev(struct rkisp_isp_stats_vdev *stats_vdev)
 	vb2_queue_release(vdev->queue);
 	rkisp_uninit_stats_vdev(stats_vdev);
 }
-
