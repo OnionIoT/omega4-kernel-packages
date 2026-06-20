@@ -1,0 +1,27 @@
+--- a/osal/allocator/allocator_dma_heap.c
++++ b/osal/allocator/allocator_dma_heap.c
+@@ -127,5 +127,9 @@ void dma_heap_init(void)
+             continue;
+ 
+         info->fd = try_open_path(info->name);
++        if (info->fd <= 0 && (info->flags & MPP_ALLOC_FLAG_CMA)) {
++            info->fd = try_open_path("reserved");
++            dma_heap_dbg_chk("dma-heap type %x %s use reserved heap fd %d\n", i, info->name, info->fd);
++        }
+         if (info->fd <= 0)
+             all_success = 0;
+@@ -209,6 +213,14 @@ static MPP_RET os_allocator_dma_heap_ope
+ 
+     *ctx = NULL;
+ 
++    /*
++     * Omega4/RV1103B RKVENC has no IOMMU in the vendor device tree. The
++     * kernel MPP importer programs the first sg dma address directly into
++     * VEPU540C registers, so dma-bufs used by the encoder must be physically
++     * contiguous. Prefer CMA dma-heap allocations when that heap is present.
++     */
++    flags = (MppAllocFlagType)((flags | MPP_ALLOC_FLAG_CMA) & MPP_ALLOC_FLAG_TYPE_MASK);
++
+     info = &heap_infos[flags];
+     if (info->fd <= 0) {
+         mpp_err_f("open dma heap type %x %s failed!\n", type, info->name);

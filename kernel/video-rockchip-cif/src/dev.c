@@ -2016,28 +2016,44 @@ static int _set_pipeline_default_fmt(struct rkcif_device *dev)
 static int subdev_asyn_register_itf(struct rkcif_device *dev)
 {
 	struct sditf_priv *sditf = NULL;
-	int i = 0;
-	int ret = 0;
+	int i = 0, registered = 0;
+	int ret = 0, first_err = 0;
 
 	if (IS_ENABLED(CONFIG_NO_GKI)) {
 		ret = rkcif_update_sensor_info(&dev->stream[0]);
 		if (ret) {
 			v4l2_err(&dev->v4l2_dev,
 				 "There is not terminal subdev, not synchronized with ISP\n");
-			return 0;
+			return -EAGAIN;
 		}
 	}
 
 	if (!dev->is_notifier_isp) {
+		if (!dev->sditf_cnt)
+			return -EAGAIN;
+
 		for (i = 0; i < dev->sditf_cnt; i++) {
 			sditf = dev->sditf[i];
-			if (sditf && (!sditf->is_combine_mode))
+			if (sditf && (!sditf->is_combine_mode)) {
 				ret = v4l2_async_register_subdev_sensor(&sditf->sd);
+				if (ret && ret != -EEXIST && !first_err)
+					first_err = ret;
+				else
+					registered++;
+			}
 		}
-		dev->is_notifier_isp = true;
+
+		if (registered) {
+			dev->is_notifier_isp = true;
+			return 0;
+		} else if (first_err) {
+			return first_err;
+		} else {
+			return -EAGAIN;
+		}
 	}
 
-	return ret;
+	return 0;
 }
 
 static int subdev_notifier_complete(struct v4l2_async_notifier *notifier)
@@ -2207,14 +2223,20 @@ static int cif_subdev_notifier(struct rkcif_device *cif_dev)
 static int notifier_isp_thread(void *data)
 {
 	struct rkcif_device *dev = data;
-	int ret = 0;
+	int i, ret = 0;
 
-	ret = wait_for_completion_timeout(&dev->cmpl_ntf, msecs_to_jiffies(5000));
-	if (ret) {
+	wait_for_completion_timeout(&dev->cmpl_ntf, msecs_to_jiffies(5000));
+
+	for (i = 0; i < 15 && !dev->is_notifier_isp; i++) {
 		mutex_lock(&rkcif_dev_mutex);
-		subdev_asyn_register_itf(dev);
+		ret = subdev_asyn_register_itf(dev);
 		mutex_unlock(&rkcif_dev_mutex);
+
+		if (ret != -EAGAIN)
+			break;
+		msleep(1000);
 	}
+
 	return 0;
 }
 
