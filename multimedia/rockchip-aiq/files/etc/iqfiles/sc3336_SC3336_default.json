@@ -1,14 +1,13 @@
 {
 	"sensor_calib":	{
 		"resolution":	{
-			"width":	2560,
-			"height":	1440
+			"width":	2304,
+			"height":	1296
 		},
 		"Gain2Reg":	{
 			"GainMode":	"EXPGAIN_MODE_LINEAR",
-			"GainRange":	[1, 480, 32, 0, 1, 32, 15360],
-			"GainRange_len":	7,
-			"GainRegDBUnit":	0.3
+			"GainRange":	[1, 778.24, 128, 0, 1, 128, 99615],
+			"GainRange_len":	7
 		},
 		"Time2Reg":	{
 			"fCoeff":	[0, 0, 1, 0.5]
@@ -16,7 +15,7 @@
 		"CISGainSet":	{
 			"CISAgainRange":	{
 				"Min":	1,
-				"Max":	32
+				"Max":	48.64
 			},
 			"CISExtraAgainRange":	{
 				"Min":	1,
@@ -24,7 +23,7 @@
 			},
 			"CISDgainRange":	{
 				"Min":	1,
-				"Max":	15
+				"Max":	16
 			},
 			"CISIspDgainRange":	{
 				"Min":	1,
@@ -40,15 +39,12 @@
 				},
 				"CISTimeRegOdevity":	{
 					"fCoeff":	[1, 0]
-				},
-				"CISTimeLinePerReg":	1
+				}
 			},
 			"Hdr":	[{
 					"name":	"HDR_TWO_FRAME",
 					"CISTimeRegUnEqualEn":	0,
-					"CISTimeRegMin":	{
-						"Coeff":	[1, 5, 9]
-					},
+					"CISTimeRegMin":	0,
 					"CISHdrTimeRegSumFac":	{
 						"fCoeff":	[0, 0]
 					},
@@ -57,14 +53,11 @@
 					},
 					"CISTimeRegOdevity":	{
 						"fCoeff":	[0, 0]
-					},
-					"CISTimeLinePerReg":	1
+					}
 				}, {
 					"name":	"HDR_THREE_FRAME",
 					"CISTimeRegUnEqualEn":	0,
-					"CISTimeRegMin":	{
-						"Coeff":	[0, 0, 0]
-					},
+					"CISTimeRegMin":	0,
 					"CISHdrTimeRegSumFac":	{
 						"fCoeff":	[0, 0]
 					},
@@ -73,8 +66,7 @@
 					},
 					"CISTimeRegOdevity":	{
 						"fCoeff":	[0, 0]
-					},
-					"CISTimeLinePerReg":	1
+					}
 				}]
 		},
 		"CISHdrSet":	{

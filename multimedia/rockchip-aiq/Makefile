@@ -16,13 +16,13 @@ include $(INCLUDE_DIR)/package.mk
 define Package/rockchip-aiq
   SECTION:=multimedia
   CATEGORY:=Multimedia
-  TITLE:=Rockchip AIQ 3A daemon and SC3336 tuning files
+  TITLE:=Rockchip AIQ 3A daemon and Omega4 SC3336 IQ files
   DEPENDS:=@TARGET_rockchip +kmod-video-rockchip-isp +kmod-video-sc3336
 endef
 
 define Package/rockchip-aiq/description
   Rockchip AIQ userspace daemon, uClibc runtime compatibility files, and
-  SC3336 IQ calibration files for the Omega4 camera pipeline.
+  Omega4 SC3336 camera IQ files for the ISP 3A pipeline.
 endef
 
 define Package/rockchip-aiq/conffiles
