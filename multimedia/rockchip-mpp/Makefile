@@ -33,6 +33,17 @@ define Package/librockchip-mpp/description
   Rockchip MPP userspace libraries for hardware video encode/decode engines.
 endef
 
+define Build/InstallDev
+	$(INSTALL_DIR) $(1)/usr/include
+	$(CP) $(PKG_INSTALL_DIR)/usr/include/rockchip $(1)/usr/include/
+	$(INSTALL_DIR) $(1)/usr/lib
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/librockchip_mpp.so* $(1)/usr/lib/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/librockchip_vpu.so* $(1)/usr/lib/
+	$(INSTALL_DIR) $(1)/usr/lib/pkgconfig
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/pkgconfig/rockchip_mpp.pc $(1)/usr/lib/pkgconfig/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/pkgconfig/rockchip_vpu.pc $(1)/usr/lib/pkgconfig/
+endef
+
 define Package/rockchip-mpp-tools
   SECTION:=multimedia
   CATEGORY:=Multimedia

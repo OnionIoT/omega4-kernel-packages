@@ -1,0 +1,61 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
+
+START=95
+STOP=10
+USE_PROCD=1
+
+service_triggers() {
+	procd_add_reload_trigger omega4-venc
+}
+
+start_service() {
+	config_load omega4-venc
+	config_foreach start_encoder encoder
+}
+
+start_encoder() {
+	local section="$1"
+	local enabled device width height format codec frames fps gop rc bitrate output output_type
+
+	config_get_bool enabled "$section" enabled 0
+	[ "$enabled" -eq 1 ] || return 0
+
+	config_get device "$section" device "/dev/video7"
+	config_get width "$section" width "640"
+	config_get height "$section" height "480"
+	config_get format "$section" format "0"
+	config_get codec "$section" codec "h264"
+	config_get frames "$section" frames "0"
+	config_get fps "$section" fps "30"
+	config_get gop "$section" gop "60"
+	config_get rc "$section" rc "vbr"
+	config_get bitrate "$section" bitrate ""
+	config_get output "$section" output "/run/omega4-venc/${section}.h264"
+	config_get output_type "$section" output_type "fifo"
+
+	if [ "$output" != "-" ]; then
+		mkdir -p "${output%/*}"
+		if [ "$output_type" = "fifo" ]; then
+			rm -f "$output"
+			mkfifo "$output"
+		fi
+	fi
+
+	procd_open_instance "$section"
+	procd_set_param command /usr/bin/omega4-vencd \
+		--device "$device" \
+		--width "$width" \
+		--height "$height" \
+		--format "$format" \
+		--codec "$codec" \
+		--frames "$frames" \
+		--fps "$fps" \
+		--gop "$gop" \
+		--rc "$rc" \
+		--output "$output"
+	[ -n "$bitrate" ] && procd_append_param command --bitrate "$bitrate"
+	[ "$frames" = "0" ] && procd_set_param respawn 5 5 0
+	procd_set_param stderr 1
+	procd_close_instance
+}
