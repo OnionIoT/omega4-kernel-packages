@@ -8,16 +8,21 @@
 
 #define _GNU_SOURCE
 
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -35,6 +40,11 @@
 #define CAMERA_BUFFERS 4
 #define MAX_CAMERA_BUFFERS 10
 #define FMT_NUM_PLANES 1
+#define RTP_CLOCK_RATE 90000U
+#define RTP_HEADER_SIZE 12
+#define RTP_DEFAULT_PAYLOAD_TYPE 96
+#define RTP_DEFAULT_MTU 1200
+#define RTP_MIN_MTU 64
 
 struct camera_frame {
 	void *start;
@@ -64,7 +74,29 @@ struct venc_config {
 	unsigned int bitrate_max;
 	unsigned int rc_mode;
 	unsigned int skip_frames;
+	const char *rtp_dest;
+	unsigned int rtp_payload_type;
+	unsigned int rtp_mtu;
 	bool dry_run;
+};
+
+struct rtp_output {
+	int fd;
+	struct sockaddr_storage addr;
+	socklen_t addrlen;
+	uint8_t *buf;
+	size_t mtu;
+	size_t max_payload;
+	unsigned int payload_type;
+	uint16_t seq;
+	uint32_t timestamp;
+	uint32_t timestamp_step;
+	uint32_t ssrc;
+};
+
+struct output_sink {
+	FILE *file;
+	struct rtp_output *rtp;
 };
 
 static volatile sig_atomic_t stop_requested;
@@ -115,6 +147,9 @@ static void usage(FILE *fp, const char *prog)
 		"      --rc MODE           vbr, cbr, fixqp, avbr, smtrc, or numeric 0..4\n"
 		"      --skip COUNT        camera warm-up frames to drop (default: 50)\n"
 		"  -o, --output PATH       output path, or - for stdout (default: -)\n"
+		"      --rtp-dest HOST:PORT send RTP/H.264 over UDP instead of writing Annex-B\n"
+		"      --rtp-payload-type N RTP payload type 0..127 (default: 96)\n"
+		"      --rtp-mtu BYTES      RTP packet MTU including 12-byte header (default: 1200)\n"
 		"      --dry-run           print resolved config and exit\n"
 		"  -h, --help              show this help\n",
 		prog);
@@ -173,6 +208,8 @@ static void parse_args(int argc, char **argv, struct venc_config *cfg)
 		.gop = 60,
 		.rc_mode = MPP_ENC_RC_MODE_VBR,
 		.skip_frames = 50,
+		.rtp_payload_type = RTP_DEFAULT_PAYLOAD_TYPE,
+		.rtp_mtu = RTP_DEFAULT_MTU,
 	};
 
 	for (i = 1; i < argc; i++) {
@@ -237,6 +274,15 @@ static void parse_args(int argc, char **argv, struct venc_config *cfg)
 		} else if (!strcmp(arg, "-o") || !strcmp(arg, "--output") || !strncmp(arg, "--output=", 9)) {
 			TAKES_VALUE();
 			cfg->output = val;
+		} else if (!strcmp(arg, "--rtp-dest") || !strncmp(arg, "--rtp-dest=", 11)) {
+			TAKES_VALUE();
+			cfg->rtp_dest = val;
+		} else if (!strcmp(arg, "--rtp-payload-type") || !strncmp(arg, "--rtp-payload-type=", 19)) {
+			TAKES_VALUE();
+			cfg->rtp_payload_type = parse_u32("rtp-payload-type", val);
+		} else if (!strcmp(arg, "--rtp-mtu") || !strncmp(arg, "--rtp-mtu=", 10)) {
+			TAKES_VALUE();
+			cfg->rtp_mtu = parse_u32("rtp-mtu", val);
 		} else {
 			fprintf(stderr, "omega4-vencd: unknown option '%s'\n", arg);
 			exit(1);
@@ -259,6 +305,14 @@ static void parse_args(int argc, char **argv, struct venc_config *cfg)
 	}
 	if (!cfg->bitrate_max)
 		cfg->bitrate_max = cfg->bitrate * 17 / 16;
+	if (cfg->rtp_payload_type > 127) {
+		fprintf(stderr, "omega4-vencd: rtp-payload-type must be 0..127\n");
+		exit(1);
+	}
+	if (cfg->rtp_mtu < RTP_MIN_MTU || cfg->rtp_mtu > 65507) {
+		fprintf(stderr, "omega4-vencd: rtp-mtu must be %u..65507\n", RTP_MIN_MTU);
+		exit(1);
+	}
 }
 
 static int xioctl(int fd, unsigned long request, void *arg)
@@ -506,6 +560,300 @@ static FILE *open_output(const char *path)
 	return fp;
 }
 
+static uint32_t random_u32(void)
+{
+	struct timespec ts;
+	uint32_t v;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	v = (uint32_t)ts.tv_nsec ^ (uint32_t)ts.tv_sec ^ ((uint32_t)getpid() << 16);
+	v ^= v << 13;
+	v ^= v >> 17;
+	v ^= v << 5;
+
+	return v ? v : 1;
+}
+
+static char *parse_rtp_dest(const char *dest, char **service)
+{
+	char *host = NULL;
+	char *end = NULL;
+	char *colon = NULL;
+
+	if (!dest || !dest[0])
+		return NULL;
+
+	if (dest[0] == '[') {
+		end = strchr(dest, ']');
+		if (!end || end[1] != ':' || !end[2])
+			return NULL;
+		host = strndup(dest + 1, (size_t)(end - dest - 1));
+		*service = strdup(end + 2);
+	} else {
+		colon = strrchr(dest, ':');
+		if (!colon || colon == dest || !colon[1])
+			return NULL;
+		host = strndup(dest, (size_t)(colon - dest));
+		*service = strdup(colon + 1);
+	}
+
+	if (!host || !*service) {
+		free(host);
+		free(*service);
+		*service = NULL;
+		return NULL;
+	}
+
+	return host;
+}
+
+static struct rtp_output *rtp_open(const struct venc_config *cfg)
+{
+	struct rtp_output *rtp = calloc(1, sizeof(*rtp));
+	struct addrinfo hints;
+	struct addrinfo *res = NULL;
+	struct addrinfo *ai;
+	char *service = NULL;
+	char *host = NULL;
+	int ret;
+
+	if (!rtp)
+		return NULL;
+
+	rtp->fd = -1;
+	rtp->mtu = cfg->rtp_mtu;
+	rtp->max_payload = cfg->rtp_mtu - RTP_HEADER_SIZE;
+	rtp->payload_type = cfg->rtp_payload_type;
+	rtp->timestamp_step = RTP_CLOCK_RATE / cfg->fps;
+	rtp->seq = (uint16_t)random_u32();
+	rtp->timestamp = random_u32();
+	rtp->ssrc = random_u32();
+	rtp->buf = malloc(rtp->mtu);
+	if (!rtp->buf)
+		goto fail;
+
+	host = parse_rtp_dest(cfg->rtp_dest, &service);
+	if (!host) {
+		fprintf(stderr, "omega4-vencd: invalid rtp-dest '%s', expected HOST:PORT\n",
+			cfg->rtp_dest);
+		goto fail;
+	}
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_socktype = SOCK_DGRAM;
+	ret = getaddrinfo(host, service, &hints, &res);
+	if (ret) {
+		fprintf(stderr, "omega4-vencd: getaddrinfo(%s:%s): %s\n",
+			host, service, gai_strerror(ret));
+		goto fail;
+	}
+
+	for (ai = res; ai; ai = ai->ai_next) {
+		rtp->fd = socket(ai->ai_family, ai->ai_socktype | SOCK_CLOEXEC, ai->ai_protocol);
+		if (rtp->fd < 0)
+			continue;
+		memcpy(&rtp->addr, ai->ai_addr, ai->ai_addrlen);
+		rtp->addrlen = ai->ai_addrlen;
+		break;
+	}
+
+	if (rtp->fd < 0) {
+		fprintf(stderr, "omega4-vencd: failed to create RTP socket: %s\n", strerror(errno));
+		goto fail;
+	}
+
+	freeaddrinfo(res);
+	free(host);
+	free(service);
+	return rtp;
+
+fail:
+	if (res)
+		freeaddrinfo(res);
+	free(host);
+	free(service);
+	if (rtp) {
+		if (rtp->fd >= 0)
+			close(rtp->fd);
+		free(rtp->buf);
+		free(rtp);
+	}
+	return NULL;
+}
+
+static void rtp_close(struct rtp_output *rtp)
+{
+	if (!rtp)
+		return;
+	if (rtp->fd >= 0)
+		close(rtp->fd);
+	free(rtp->buf);
+	free(rtp);
+}
+
+static int rtp_send_packet(struct rtp_output *rtp, const uint8_t *payload,
+			   size_t payload_len, bool marker)
+{
+	size_t len = RTP_HEADER_SIZE + payload_len;
+
+	if (len > rtp->mtu)
+		return -1;
+
+	rtp->buf[0] = 0x80;
+	rtp->buf[1] = (uint8_t)(rtp->payload_type & 0x7f);
+	if (marker)
+		rtp->buf[1] |= 0x80;
+	rtp->buf[2] = (uint8_t)(rtp->seq >> 8);
+	rtp->buf[3] = (uint8_t)(rtp->seq);
+	rtp->buf[4] = (uint8_t)(rtp->timestamp >> 24);
+	rtp->buf[5] = (uint8_t)(rtp->timestamp >> 16);
+	rtp->buf[6] = (uint8_t)(rtp->timestamp >> 8);
+	rtp->buf[7] = (uint8_t)(rtp->timestamp);
+	rtp->buf[8] = (uint8_t)(rtp->ssrc >> 24);
+	rtp->buf[9] = (uint8_t)(rtp->ssrc >> 16);
+	rtp->buf[10] = (uint8_t)(rtp->ssrc >> 8);
+	rtp->buf[11] = (uint8_t)(rtp->ssrc);
+	if (payload != rtp->buf + RTP_HEADER_SIZE)
+		memcpy(rtp->buf + RTP_HEADER_SIZE, payload, payload_len);
+
+	if (sendto(rtp->fd, rtp->buf, len, 0,
+		   (struct sockaddr *)&rtp->addr, rtp->addrlen) != (ssize_t)len)
+		return -1;
+
+	rtp->seq++;
+	return 0;
+}
+
+static int rtp_send_nal(struct rtp_output *rtp, const uint8_t *nal,
+			size_t nal_len, bool marker)
+{
+	size_t fu_payload;
+	size_t off;
+
+	if (!nal_len)
+		return 0;
+
+	if (nal_len <= rtp->max_payload)
+		return rtp_send_packet(rtp, nal, nal_len, marker);
+
+	if (rtp->max_payload <= 2)
+		return -1;
+
+	fu_payload = rtp->max_payload - 2;
+	off = 1;
+	while (off < nal_len) {
+		size_t chunk = nal_len - off;
+		bool start = off == 1;
+		bool end;
+
+		if (chunk > fu_payload)
+			chunk = fu_payload;
+		end = (off + chunk) >= nal_len;
+
+		rtp->buf[RTP_HEADER_SIZE] = (uint8_t)((nal[0] & 0xe0) | 28);
+		rtp->buf[RTP_HEADER_SIZE + 1] = (uint8_t)(nal[0] & 0x1f);
+		if (start)
+			rtp->buf[RTP_HEADER_SIZE + 1] |= 0x80;
+		if (end)
+			rtp->buf[RTP_HEADER_SIZE + 1] |= 0x40;
+		memcpy(rtp->buf + RTP_HEADER_SIZE + 2, nal + off, chunk);
+
+		if (rtp_send_packet(rtp, rtp->buf + RTP_HEADER_SIZE,
+				    chunk + 2, marker && end))
+			return -1;
+		off += chunk;
+	}
+
+	return 0;
+}
+
+static ssize_t h264_find_start_code(const uint8_t *data, size_t len,
+				    size_t from, size_t *prefix_len)
+{
+	size_t i;
+
+	for (i = from; i + 3 <= len; i++) {
+		if (data[i] || data[i + 1])
+			continue;
+		if (data[i + 2] == 1) {
+			*prefix_len = 3;
+			return (ssize_t)i;
+		}
+		if (i + 4 <= len && data[i + 2] == 0 && data[i + 3] == 1) {
+			*prefix_len = 4;
+			return (ssize_t)i;
+		}
+	}
+
+	return -1;
+}
+
+static int rtp_send_annexb(struct rtp_output *rtp, const void *data,
+			   size_t len, bool marker)
+{
+	const uint8_t *bytes = data;
+	ssize_t pos;
+	size_t prefix = 0;
+	unsigned int nal_count = 0;
+	unsigned int nal_idx = 0;
+
+	pos = h264_find_start_code(bytes, len, 0, &prefix);
+	if (pos < 0)
+		return rtp_send_nal(rtp, bytes, len, marker);
+
+	while (pos >= 0) {
+		size_t nal_start = (size_t)pos + prefix;
+		ssize_t next;
+		size_t next_prefix = 0;
+
+		next = h264_find_start_code(bytes, len, nal_start, &next_prefix);
+		if ((size_t)nal_start < (next >= 0 ? (size_t)next : len))
+			nal_count++;
+		pos = next;
+		prefix = next_prefix;
+	}
+
+	pos = h264_find_start_code(bytes, len, 0, &prefix);
+	while (pos >= 0) {
+		size_t nal_start = (size_t)pos + prefix;
+		ssize_t next;
+		size_t next_prefix = 0;
+		size_t nal_end;
+
+		next = h264_find_start_code(bytes, len, nal_start, &next_prefix);
+		nal_end = next >= 0 ? (size_t)next : len;
+		if (nal_start < nal_end) {
+			nal_idx++;
+			if (rtp_send_nal(rtp, bytes + nal_start, nal_end - nal_start,
+					 marker && nal_idx == nal_count))
+				return -1;
+		}
+		pos = next;
+		prefix = next_prefix;
+	}
+
+	return 0;
+}
+
+static int output_write(struct output_sink *sink, const void *ptr, size_t len,
+			bool end_of_frame)
+{
+	if (!len)
+		return 0;
+
+	if (sink->rtp) {
+		if (rtp_send_annexb(sink->rtp, ptr, len, end_of_frame)) {
+			fprintf(stderr, "omega4-vencd: RTP send failed: %s\n", strerror(errno));
+			return -1;
+		}
+		if (end_of_frame)
+			sink->rtp->timestamp += sink->rtp->timestamp_step;
+		return 0;
+	}
+
+	return fwrite(ptr, 1, len, sink->file) == len ? 0 : -1;
+}
+
 static void setup_encoder_cfg(MppCtx ctx, MppApi *mpi, MppEncCfg cfg,
 			      const struct venc_config *vcfg)
 {
@@ -570,7 +918,7 @@ static int run_encoder(const struct venc_config *vcfg)
 	MppBufferGroup buf_grp = NULL;
 	MppBuffer pkt_buf = NULL;
 	MppBuffer md_info = NULL;
-	FILE *out = NULL;
+	struct output_sink sink;
 	unsigned int encoded = 0;
 	unsigned int captured = 0;
 	size_t packet_size = vcfg->width * vcfg->height;
@@ -580,7 +928,15 @@ static int run_encoder(const struct venc_config *vcfg)
 	signal(SIGTERM, on_signal);
 	signal(SIGINT, on_signal);
 
-	out = open_output(vcfg->output);
+	memset(&sink, 0, sizeof(sink));
+	if (vcfg->rtp_dest) {
+		sink.rtp = rtp_open(vcfg);
+		if (!sink.rtp)
+			goto done;
+	} else {
+		sink.file = open_output(vcfg->output);
+	}
+
 	cam = camera_open(vcfg->device, vcfg->width, vcfg->height, (MppFrameFormat)vcfg->format);
 	if (!cam)
 		goto done;
@@ -613,7 +969,7 @@ static int run_encoder(const struct venc_config *vcfg)
 		if (mpi->control(ctx, MPP_ENC_GET_HDR_SYNC, hdr) == MPP_OK) {
 			void *ptr = mpp_packet_get_pos(hdr);
 			size_t len = mpp_packet_get_length(hdr);
-			if (len && fwrite(ptr, 1, len, out) != len)
+			if (len && output_write(&sink, ptr, len, false))
 				goto done;
 		}
 		mpp_packet_deinit(&hdr);
@@ -667,12 +1023,12 @@ static int run_encoder(const struct venc_config *vcfg)
 			if (packet) {
 				void *ptr = mpp_packet_get_pos(packet);
 				size_t len = mpp_packet_get_length(packet);
-				if (len && fwrite(ptr, 1, len, out) != len) {
+				eoi = mpp_packet_is_partition(packet) ? mpp_packet_is_eoi(packet) : 1;
+				if (len && output_write(&sink, ptr, len, eoi)) {
 					mpp_packet_deinit(&packet);
 					camera_put_frame(cam, frame_idx);
 					goto done;
 				}
-				eoi = mpp_packet_is_partition(packet) ? mpp_packet_is_eoi(packet) : 1;
 				mpp_packet_deinit(&packet);
 			}
 		} while (!eoi);
@@ -681,8 +1037,9 @@ static int run_encoder(const struct venc_config *vcfg)
 		encoded++;
 	}
 
-	fflush(out);
-	ret = ferror(out) ? 1 : 0;
+	if (sink.file)
+		fflush(sink.file);
+	ret = sink.file && ferror(sink.file) ? 1 : 0;
 
 done:
 	if (ctx && mpi)
@@ -698,8 +1055,9 @@ done:
 	if (buf_grp)
 		mpp_buffer_group_put(buf_grp);
 	camera_close(cam);
-	if (out && out != stdout)
-		fclose(out);
+	if (sink.file && sink.file != stdout)
+		fclose(sink.file);
+	rtp_close(sink.rtp);
 
 	return ret;
 }
@@ -712,10 +1070,12 @@ int main(int argc, char **argv)
 
 	if (cfg.dry_run) {
 		printf("device=%s width=%u height=%u format=%u frames=%u fps=%u gop=%u "
-		       "bitrate=%u:%u:%u rc=%u output=%s skip=%u backend=libmpp\n",
+		       "bitrate=%u:%u:%u rc=%u output=%s skip=%u "
+		       "rtp-dest=%s rtp-payload-type=%u rtp-mtu=%u backend=libmpp\n",
 		       cfg.device, cfg.width, cfg.height, cfg.format, cfg.frames,
 		       cfg.fps, cfg.gop, cfg.bitrate, cfg.bitrate_min, cfg.bitrate_max,
-		       cfg.rc_mode, cfg.output, cfg.skip_frames);
+		       cfg.rc_mode, cfg.output, cfg.skip_frames,
+		       cfg.rtp_dest ? cfg.rtp_dest : "-", cfg.rtp_payload_type, cfg.rtp_mtu);
 		return 0;
 	}
 

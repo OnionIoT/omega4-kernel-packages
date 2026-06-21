@@ -17,6 +17,7 @@ start_service() {
 start_encoder() {
 	local section="$1"
 	local enabled device width height format codec frames fps gop rc bitrate output output_type
+	local rtp_dest rtp_payload_type rtp_mtu
 
 	config_get_bool enabled "$section" enabled 0
 	[ "$enabled" -eq 1 ] || return 0
@@ -33,8 +34,11 @@ start_encoder() {
 	config_get bitrate "$section" bitrate ""
 	config_get output "$section" output "/run/omega4-venc/${section}.h264"
 	config_get output_type "$section" output_type "fifo"
+	config_get rtp_dest "$section" rtp_dest ""
+	config_get rtp_payload_type "$section" rtp_payload_type "96"
+	config_get rtp_mtu "$section" rtp_mtu "1200"
 
-	if [ "$output" != "-" ]; then
+	if [ -z "$rtp_dest" ] && [ "$output" != "-" ]; then
 		mkdir -p "${output%/*}"
 		if [ "$output_type" = "fifo" ]; then
 			rm -f "$output"
@@ -55,6 +59,11 @@ start_encoder() {
 		--rc "$rc" \
 		--output "$output"
 	[ -n "$bitrate" ] && procd_append_param command --bitrate "$bitrate"
+	if [ -n "$rtp_dest" ]; then
+		procd_append_param command --rtp-dest "$rtp_dest"
+		procd_append_param command --rtp-payload-type "$rtp_payload_type"
+		procd_append_param command --rtp-mtu "$rtp_mtu"
+	fi
 	[ "$frames" = "0" ] && procd_set_param respawn 5 5 0
 	procd_set_param stderr 1
 	procd_close_instance
