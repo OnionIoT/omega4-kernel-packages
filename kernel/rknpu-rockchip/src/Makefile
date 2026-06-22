@@ -4,9 +4,10 @@ obj-$(CONFIG_ROCKCHIP_RKNPU) += rknpu.o
 ccflags-y += -I$(srctree)/$(src)/include
 ccflags-y += -I$(src)/include
 ccflags-y += -Werror
-ccflags-y += -DCONFIG_ROCKCHIP_RKNPU_DRM_GEM
-ccflags-y += -DCONFIG_ROCKCHIP_RKNPU_DEBUG_FS
-ccflags-y += -DCONFIG_ROCKCHIP_RKNPU_PROC_FS
+ccflags-$(CONFIG_ROCKCHIP_RKNPU_DRM_GEM) += -DCONFIG_ROCKCHIP_RKNPU_DRM_GEM
+ccflags-$(CONFIG_ROCKCHIP_RKNPU_DMA_HEAP) += -DCONFIG_ROCKCHIP_RKNPU_DMA_HEAP
+ccflags-$(CONFIG_ROCKCHIP_RKNPU_DEBUG_FS) += -DCONFIG_ROCKCHIP_RKNPU_DEBUG_FS
+ccflags-$(CONFIG_ROCKCHIP_RKNPU_PROC_FS) += -DCONFIG_ROCKCHIP_RKNPU_PROC_FS
 
 rknpu-y += rknpu_drv.o
 rknpu-y += rknpu_reset.o

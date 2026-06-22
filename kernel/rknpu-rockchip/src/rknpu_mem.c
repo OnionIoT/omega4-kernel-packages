@@ -215,7 +215,7 @@ int rknpu_mem_destroy_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 		return ret;
 	}
 
-	if (!kern_addr_valid(args.obj_addr)) {
+	if (!virt_addr_valid((void *)(uintptr_t)args.obj_addr)) {
 		LOG_ERROR("%s: invalid obj_addr: %#llx\n", __func__,
 			  (__u64)(uintptr_t)args.obj_addr);
 		ret = -EINVAL;
@@ -317,7 +317,7 @@ int rknpu_mem_sync_ioctl(struct rknpu_device *rknpu_dev, unsigned long data)
 		return ret;
 	}
 
-	if (!kern_addr_valid(args.obj_addr)) {
+	if (!virt_addr_valid((void *)(uintptr_t)args.obj_addr)) {
 		LOG_ERROR("%s: invalid obj_addr: %#llx\n", __func__,
 			  (__u64)(uintptr_t)args.obj_addr);
 		ret = -EINVAL;
@@ -328,12 +328,15 @@ int rknpu_mem_sync_ioctl(struct rknpu_device *rknpu_dev, unsigned long data)
 
 #ifndef CONFIG_DMABUF_PARTIAL
 	if (args.flags & RKNPU_MEM_SYNC_TO_DEVICE) {
-		rknpu_dma_buf_sync(rknpu_dev, rknpu_obj, args.offset, args.size,
-				   DMA_TO_DEVICE, false);
+		ret = dma_buf_end_cpu_access(rknpu_obj->dmabuf, DMA_TO_DEVICE);
+		if (ret)
+			return ret;
 	}
 	if (args.flags & RKNPU_MEM_SYNC_FROM_DEVICE) {
-		rknpu_dma_buf_sync(rknpu_dev, rknpu_obj, args.offset, args.size,
-				   DMA_FROM_DEVICE, true);
+		ret = dma_buf_begin_cpu_access(rknpu_obj->dmabuf,
+					       DMA_FROM_DEVICE);
+		if (ret)
+			return ret;
 	}
 #else
 	dmabuf = rknpu_obj->dmabuf;

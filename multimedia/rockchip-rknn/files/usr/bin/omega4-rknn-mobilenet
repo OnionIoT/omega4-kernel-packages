@@ -1,0 +1,9 @@
+#!/bin/sh
+# Run the RV1103B RKNN Mobilenet demo with the packaged uClibc runtime.
+
+MODEL=${1:-/usr/share/rockchip-rknn/models/RV1106B_RV1103B/mobilenet_v1.rknn}
+IMAGE=${2:-/usr/share/rockchip-rknn/images/dog_224x224.jpg}
+LOOP_COUNT=${3:-1}
+
+export LD_LIBRARY_PATH="/usr/lib/rknn-uclibc:/usr/lib/rkaiq-uclibc${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec /usr/bin/rknn_mobilenet_demo "$MODEL" "$IMAGE" "$LOOP_COUNT"

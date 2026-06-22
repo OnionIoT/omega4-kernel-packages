@@ -1,0 +1,120 @@
+#!/bin/sh
+# Capture one camera frame and run the packaged RKNN Mobilenet demo.
+
+set -eu
+
+DEVICE=/dev/video7
+WIDTH=640
+HEIGHT=480
+FORMAT=nv12
+FPS=30
+WARMUP_FRAMES=15
+MODEL=/usr/share/rockchip-rknn/models/RV1106B_RV1103B/mobilenet_v1.rknn
+RAW_IMAGE=/tmp/omega4-rknn-camera.nv12
+IMAGE=/tmp/omega4-rknn-camera.bmp
+LOOP_COUNT=1
+
+usage() {
+	cat <<EOF
+Usage: omega4-rknn-camera [options]
+
+Options:
+  --device PATH       V4L2 capture device (default: /dev/video7)
+  --width PIXELS      Capture width (default: 640)
+  --height PIXELS     Capture height (default: 480)
+  --format FOURCC     V4L2 input format (default: nv12)
+  --fps FPS           Capture frame rate hint (default: 30)
+  --warmup-frames N   Capture N frames and use the last one (default: 15)
+  --model PATH        RKNN model path
+  --raw-image PATH    Captured raw NV12 path
+  --image PATH        Converted BMP path
+  --loop-count N      RKNN inference loop count (default: 1)
+  -h, --help          Show this help
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--device)
+			DEVICE=$2
+			shift 2
+			;;
+		--width)
+			WIDTH=$2
+			shift 2
+			;;
+		--height)
+			HEIGHT=$2
+			shift 2
+			;;
+		--format)
+			FORMAT=$2
+			shift 2
+			;;
+		--fps)
+			FPS=$2
+			shift 2
+			;;
+		--warmup-frames)
+			WARMUP_FRAMES=$2
+			shift 2
+			;;
+		--model)
+			MODEL=$2
+			shift 2
+			;;
+		--image)
+			IMAGE=$2
+			shift 2
+			;;
+		--raw-image)
+			RAW_IMAGE=$2
+			shift 2
+			;;
+		--loop-count)
+			LOOP_COUNT=$2
+			shift 2
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			usage >&2
+			exit 2
+			;;
+	esac
+done
+
+if [ -x /etc/init.d/rkaiq ] && ! pidof rkaiq_3A_server >/dev/null 2>&1; then
+	/etc/init.d/rkaiq start >/dev/null 2>&1 || true
+	sleep 2
+fi
+
+if [ "$FORMAT" != "nv12" ] && [ "$FORMAT" != "NV12" ]; then
+	echo "Only NV12 capture is supported by this wrapper" >&2
+	exit 2
+fi
+
+case "$WARMUP_FRAMES" in
+	''|*[!0-9]*)
+		echo "Invalid --warmup-frames value: $WARMUP_FRAMES" >&2
+		exit 2
+		;;
+esac
+
+if [ "$WARMUP_FRAMES" -lt 1 ]; then
+	echo "--warmup-frames must be at least 1" >&2
+	exit 2
+fi
+
+v4l2-ctl -d "$DEVICE" \
+	--set-fmt-video=width="$WIDTH",height="$HEIGHT",pixelformat=NV12 \
+	--stream-mmap \
+	--stream-count="$WARMUP_FRAMES" \
+	--stream-to="$RAW_IMAGE"
+
+omega4-nv12-to-bmp "$RAW_IMAGE" "$IMAGE" "$WIDTH" "$HEIGHT" 224 224
+
+exec omega4-rknn-mobilenet "$MODEL" "$IMAGE" "$LOOP_COUNT"
