@@ -34,6 +34,7 @@ omega4-vencd \
 	--gop 15 \
 	--rc cbr \
 	--bitrate 800000 \
+	--buffers 2 \
 	--rtp-dest 127.0.0.1:5601 \
 	--rtp-payload-type 96 \
 	--rtp-mtu 1200
@@ -120,12 +121,17 @@ uci set omega4-venc.main.fps='60'
 uci set omega4-venc.main.gop='15'
 uci set omega4-venc.main.rc='cbr'
 uci set omega4-venc.main.bitrate='800000'
+uci set omega4-venc.main.buffers='2'
 uci set omega4-venc.main.rtp_dest='192.168.1.10:5601'
 uci set omega4-venc.main.rtp_payload_type='96'
 uci set omega4-venc.main.rtp_mtu='1200'
 uci commit omega4-venc
 /etc/init.d/omega4-vencd restart
 ```
+
+`buffers` controls how many V4L2 capture buffers `omega4-vencd` queues. The
+default is `4`; use `2` for lower latency after the camera path is stable.
+Allowed values are `2..10`.
 
 ## Validation
 

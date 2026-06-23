@@ -16,7 +16,7 @@ start_service() {
 
 start_encoder() {
 	local section="$1"
-	local enabled device width height format codec frames fps gop rc bitrate output output_type
+	local enabled device width height format codec frames fps gop rc bitrate buffers output output_type
 	local rtp_dest rtp_payload_type rtp_mtu
 
 	config_get_bool enabled "$section" enabled 0
@@ -32,6 +32,7 @@ start_encoder() {
 	config_get gop "$section" gop "60"
 	config_get rc "$section" rc "vbr"
 	config_get bitrate "$section" bitrate ""
+	config_get buffers "$section" buffers "4"
 	config_get output "$section" output "/run/omega4-venc/${section}.h264"
 	config_get output_type "$section" output_type "fifo"
 	config_get rtp_dest "$section" rtp_dest ""
@@ -57,6 +58,7 @@ start_encoder() {
 		--fps "$fps" \
 		--gop "$gop" \
 		--rc "$rc" \
+		--buffers "$buffers" \
 		--output "$output"
 	[ -n "$bitrate" ] && procd_append_param command --bitrate "$bitrate"
 	if [ -n "$rtp_dest" ]; then

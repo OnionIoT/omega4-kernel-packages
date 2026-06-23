@@ -37,7 +37,8 @@
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define ALIGN_UP(v, a) (((v) + (a) - 1) & ~((a) - 1))
-#define CAMERA_BUFFERS 4
+#define DEFAULT_CAMERA_BUFFERS 4
+#define MIN_CAMERA_BUFFERS 2
 #define MAX_CAMERA_BUFFERS 10
 #define FMT_NUM_PLANES 1
 #define RTP_CLOCK_RATE 90000U
@@ -74,6 +75,7 @@ struct venc_config {
 	unsigned int bitrate_max;
 	unsigned int rc_mode;
 	unsigned int skip_frames;
+	unsigned int camera_buffers;
 	const char *rtp_dest;
 	unsigned int rtp_payload_type;
 	unsigned int rtp_mtu;
@@ -146,13 +148,14 @@ static void usage(FILE *fp, const char *prog)
 		"      --bitrate-max BPS   maximum bitrate override\n"
 		"      --rc MODE           vbr, cbr, fixqp, avbr, smtrc, or numeric 0..4\n"
 		"      --skip COUNT        camera warm-up frames to drop (default: 50)\n"
+		"      --buffers COUNT     V4L2 capture buffers %u..%u (default: %u)\n"
 		"  -o, --output PATH       output path, or - for stdout (default: -)\n"
 		"      --rtp-dest HOST:PORT send RTP/H.264 over UDP instead of writing Annex-B\n"
 		"      --rtp-payload-type N RTP payload type 0..127 (default: 96)\n"
 		"      --rtp-mtu BYTES      RTP packet MTU including 12-byte header (default: 1200)\n"
 		"      --dry-run           print resolved config and exit\n"
 		"  -h, --help              show this help\n",
-		prog);
+		prog, MIN_CAMERA_BUFFERS, MAX_CAMERA_BUFFERS, DEFAULT_CAMERA_BUFFERS);
 }
 
 static void fail(const char *msg)
@@ -208,6 +211,7 @@ static void parse_args(int argc, char **argv, struct venc_config *cfg)
 		.gop = 60,
 		.rc_mode = MPP_ENC_RC_MODE_VBR,
 		.skip_frames = 50,
+		.camera_buffers = DEFAULT_CAMERA_BUFFERS,
 		.rtp_payload_type = RTP_DEFAULT_PAYLOAD_TYPE,
 		.rtp_mtu = RTP_DEFAULT_MTU,
 	};
@@ -271,6 +275,9 @@ static void parse_args(int argc, char **argv, struct venc_config *cfg)
 		} else if (!strcmp(arg, "--skip") || !strncmp(arg, "--skip=", 7)) {
 			TAKES_VALUE();
 			cfg->skip_frames = parse_u32("skip", val);
+		} else if (!strcmp(arg, "--buffers") || !strncmp(arg, "--buffers=", 10)) {
+			TAKES_VALUE();
+			cfg->camera_buffers = parse_u32("buffers", val);
 		} else if (!strcmp(arg, "-o") || !strcmp(arg, "--output") || !strncmp(arg, "--output=", 9)) {
 			TAKES_VALUE();
 			cfg->output = val;
@@ -313,6 +320,11 @@ static void parse_args(int argc, char **argv, struct venc_config *cfg)
 		fprintf(stderr, "omega4-vencd: rtp-mtu must be %u..65507\n", RTP_MIN_MTU);
 		exit(1);
 	}
+	if (cfg->camera_buffers < MIN_CAMERA_BUFFERS || cfg->camera_buffers > MAX_CAMERA_BUFFERS) {
+		fprintf(stderr, "omega4-vencd: buffers must be %u..%u\n",
+			MIN_CAMERA_BUFFERS, MAX_CAMERA_BUFFERS);
+		exit(1);
+	}
 }
 
 static int xioctl(int fd, unsigned long request, void *arg)
@@ -330,7 +342,8 @@ static int xioctl(int fd, unsigned long request, void *arg)
 }
 
 static struct camera_source *camera_open(const char *device, unsigned int width,
-					 unsigned int height, MppFrameFormat fmt)
+					 unsigned int height, MppFrameFormat fmt,
+					 unsigned int buffer_count)
 {
 	struct camera_source *cam = calloc(1, sizeof(*cam));
 	struct v4l2_capability cap;
@@ -385,14 +398,16 @@ static struct camera_source *camera_open(const char *device, unsigned int width,
 		goto fail;
 
 	memset(&req, 0, sizeof(req));
-	req.count = CAMERA_BUFFERS;
+	req.count = buffer_count;
 	req.type = cam->type;
 	req.memory = V4L2_MEMORY_MMAP;
 	if (xioctl(cam->fd, VIDIOC_REQBUFS, &req) < 0)
 		goto fail;
-	if (req.count != CAMERA_BUFFERS)
+	if (req.count < buffer_count) {
+		errno = ENOSPC;
 		goto fail;
-	cam->bufcnt = req.count;
+	}
+	cam->bufcnt = buffer_count;
 
 	for (i = 0; i < cam->bufcnt; i++) {
 		struct v4l2_buffer buf;
@@ -937,7 +952,8 @@ static int run_encoder(const struct venc_config *vcfg)
 		sink.file = open_output(vcfg->output);
 	}
 
-	cam = camera_open(vcfg->device, vcfg->width, vcfg->height, (MppFrameFormat)vcfg->format);
+	cam = camera_open(vcfg->device, vcfg->width, vcfg->height,
+			  (MppFrameFormat)vcfg->format, vcfg->camera_buffers);
 	if (!cam)
 		goto done;
 
@@ -1071,10 +1087,10 @@ int main(int argc, char **argv)
 	if (cfg.dry_run) {
 		printf("device=%s width=%u height=%u format=%u frames=%u fps=%u gop=%u "
 		       "bitrate=%u:%u:%u rc=%u output=%s skip=%u "
-		       "rtp-dest=%s rtp-payload-type=%u rtp-mtu=%u backend=libmpp\n",
+		       "buffers=%u rtp-dest=%s rtp-payload-type=%u rtp-mtu=%u backend=libmpp\n",
 		       cfg.device, cfg.width, cfg.height, cfg.format, cfg.frames,
 		       cfg.fps, cfg.gop, cfg.bitrate, cfg.bitrate_min, cfg.bitrate_max,
-		       cfg.rc_mode, cfg.output, cfg.skip_frames,
+		       cfg.rc_mode, cfg.output, cfg.skip_frames, cfg.camera_buffers,
 		       cfg.rtp_dest ? cfg.rtp_dest : "-", cfg.rtp_payload_type, cfg.rtp_mtu);
 		return 0;
 	}
