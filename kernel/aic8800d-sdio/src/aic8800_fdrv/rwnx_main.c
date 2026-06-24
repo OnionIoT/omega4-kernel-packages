@@ -193,6 +193,8 @@ extern char country_code[];
 	.max_power  = 30, /* FIXME */               \
 }
 
+#define RWNX_DEFAULT_TX_POWER_DBM 20
+
 static struct ieee80211_rate rwnx_ratetable[] = {
 	RATE(10,  0x00, 0),
 	RATE(20,  0x01, IEEE80211_RATE_SHORT_PREAMBLE),
@@ -3762,7 +3764,7 @@ static int rwnx_cfg80211_get_tx_power(struct wiphy *wiphy,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)
  struct wireless_dev *wdev,
 #endif
-	int *mbm)
+	int *dbm)
 {
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
     struct wireless_dev *wdev = NULL;
@@ -3772,7 +3774,10 @@ static int rwnx_cfg80211_get_tx_power(struct wiphy *wiphy,
     s8 pwr = 0;
     int res = 0;
 
-	*mbm = get_txpwr_max(pwr);
+	pwr = get_txpwr_max(pwr);
+	if (pwr <= 0 || pwr > 30)
+		pwr = RWNX_DEFAULT_TX_POWER_DBM;
+	*dbm = pwr;
 
     return res;
 }
