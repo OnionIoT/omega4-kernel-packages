@@ -58,10 +58,10 @@ void bt_data_dump(char* tag, void* data, unsigned long len){
 	unsigned long i = 0;
 	uint8_t* data_ = (uint8_t* )data;
 
-	printk("%s %s len:(%lu)\r\n", __func__, tag, len);
+	pr_debug("%s %s len:(%lu)\r\n", __func__, tag, len);
 
 	for (i = 0; i < len; i += 16){
-	printk("%02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X %02X %02X %02X %02X %02X %02X\r\n",
+	pr_debug("%02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X %02X %02X %02X %02X %02X %02X\r\n",
 			data_[0 + i],
 			data_[1 + i],
 			data_[2 + i],
@@ -95,7 +95,7 @@ static int btsdio_tx_packet(struct btsdio_data *data, struct sk_buff *skb)
 	//bt_data_dump("btwrite", skb->data, skb->len);
 	err = rwnx_sdio_bt_send_req(g_rwnx_plat->sdiodev->rwnx_hw, skb->len, skb);
 	if(err<0){
-		printk("%s rwnx_sdio_bt_send_req error %d",__func__,err);
+		AICBT_ERR("%s rwnx_sdio_bt_send_req error %d",__func__,err);
 		return err;
 	}
 

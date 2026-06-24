@@ -9,6 +9,8 @@ STREAM=1
 UDP_LISTEN=5601
 UDP_DEST=127.0.0.1:5600
 FEC=
+STATUS_FILE=
+STATUS_INTERVAL_MS=1000
 RTSP_URL=
 RTSP_LATENCY=50
 RTSP_PROTOCOLS=tcp
@@ -27,6 +29,8 @@ options:
   --udp-listen PORT         Air-side RTP/UDP input to RF (default 5601)
   --udp-dest HOST:PORT      Ground-side RTP/UDP output (default 127.0.0.1:5600)
   --fec DATA:PARITY         Enable omega4-linkd XOR FEC, e.g. 8:1
+  --status-file PATH        Write omega4-linkd status JSON
+  --status-interval-ms MS   Status JSON update interval (default 1000)
   --rtsp-url URL            Air-side RTSP camera input; omit for external RTP/UDP
   --rtsp-latency MS         GStreamer rtspsrc latency (default 50)
   --rtsp-protocols FLAGS    GStreamer rtspsrc protocols, e.g. tcp or udp
@@ -96,6 +100,16 @@ while [ "$#" -gt 0 ]; do
 			FEC="$2"
 			shift 2
 			;;
+		--status-file)
+			[ "$#" -ge 2 ] || die "missing --status-file value"
+			STATUS_FILE="$2"
+			shift 2
+			;;
+		--status-interval-ms)
+			[ "$#" -ge 2 ] || die "missing --status-interval-ms value"
+			STATUS_INTERVAL_MS="$2"
+			shift 2
+			;;
 		--rtsp-url)
 			[ "$#" -ge 2 ] || die "missing --rtsp-url value"
 			RTSP_URL="$2"
@@ -135,11 +149,15 @@ case "$FEC" in
 	''|[1-9]*:[1-9]*) ;;
 	*) die "invalid --fec: $FEC" ;;
 esac
+case "$STATUS_INTERVAL_MS" in
+	*[!0-9]*|'') die "invalid --status-interval-ms: $STATUS_INTERVAL_MS" ;;
+esac
 
 LINK_ARGS="--iface $IFACE --freq $FREQ --ht-mode $HT_MODE --stream $STREAM"
 [ "$SETUP" -eq 1 ] && LINK_ARGS="$LINK_ARGS --setup"
 [ "$VERBOSE" -eq 1 ] && LINK_ARGS="$LINK_ARGS --verbose"
 [ -n "$FEC" ] && LINK_ARGS="$LINK_ARGS --fec $FEC"
+[ -n "$STATUS_FILE" ] && LINK_ARGS="$LINK_ARGS --status-file $STATUS_FILE --status-interval-ms $STATUS_INTERVAL_MS"
 
 cleanup() {
 	[ -n "$LINK_PID" ] && kill "$LINK_PID" 2>/dev/null

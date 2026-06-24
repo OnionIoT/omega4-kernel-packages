@@ -27,21 +27,21 @@
 #define HCI_VERSION_CODE LINUX_VERSION_CODE
 
 
-#define PRINT_CMD_EVENT         1
-#define PRINT_ACL_DATA          1
-#define PRINT_SCO_DATA          1
+#define PRINT_CMD_EVENT         0
+#define PRINT_ACL_DATA          0
+#define PRINT_SCO_DATA          0
 
-#define AICBT_DBG_FLAG          1
+#define AICBT_DBG_FLAG          0
 
 #if AICBT_DBG_FLAG
-#define AICBT_DBG(fmt, arg...) printk( "aic_btsdio: " fmt "\n" , ## arg)
+#define AICBT_DBG(fmt, arg...) pr_debug("aic_btsdio: " fmt "\n" , ## arg)
 #else
 #define AICBT_DBG(fmt, arg...)
 #endif
 
-#define AICBT_INFO(fmt, arg...) printk("aic_btsdio: " fmt "\n" , ## arg)
-#define AICBT_WARN(fmt, arg...) printk("aic_btsdio: " fmt "\n" , ## arg)
-#define AICBT_ERR(fmt, arg...) printk("aic_btsdio: " fmt "\n" , ## arg)
+#define AICBT_INFO(fmt, arg...) pr_debug("aic_btsdio: " fmt "\n" , ## arg)
+#define AICBT_WARN(fmt, arg...) pr_warn("aic_btsdio: " fmt "\n" , ## arg)
+#define AICBT_ERR(fmt, arg...) pr_err("aic_btsdio: " fmt "\n" , ## arg)
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 4, 0)
 #define GET_DRV_DATA(x)        hci_get_drvdata(x)
@@ -551,4 +551,3 @@ void btsdio_remove(void);
 int bt_sdio_recv(u8 *data,u32 data_len);
 #endif
 #endif//_AICWF_SDIO_BT_H_
-

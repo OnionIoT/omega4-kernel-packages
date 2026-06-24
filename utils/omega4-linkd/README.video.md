@@ -66,4 +66,9 @@ uci commit omega4-link
 - No RTP-aware jitter buffer on the Omega4 side. Recovered packets are emitted
   when the parity packet arrives, so downstream players should tolerate minor
   packet reordering.
-- Link quality is currently measured by packet counters from `omega4-linkd`.
+- Link quality is exported by `omega4-linkd` status JSON. Service-managed video
+  sections write `/tmp/omega4-link-video-air.json` or
+  `/tmp/omega4-link-video-ground.json` by default.
+- RSSI comes from receive radiotap `DBM_ANTSIGNAL`. The current AIC8800D driver
+  exports RSSI in monitor mode but does not export antenna noise, so `snr_db`
+  remains `null` until a noise or SNR source is added.

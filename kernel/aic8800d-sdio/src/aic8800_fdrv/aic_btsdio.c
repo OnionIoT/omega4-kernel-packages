@@ -114,7 +114,7 @@ int bt_bypass_event(struct sk_buff *skb)
                     case HCI_LE_EXTENDED_ADVERTISING_REPORT_EVT:
                     {
                         if(aic_queue_cnt() > (QUEUE_SIZE-490)){
-                            printk("more adv report bypass\r\n");
+                            pr_debug("more adv report bypass\r\n");
                             ret = 1;
                         }
                     }
@@ -178,7 +178,7 @@ static int bypass_event(struct sk_buff *skb)
                 if(sub_opcpde == 0xfd57){
                     if(vendor_apcf_sent_done){
                         vendor_apcf_sent_done--;
-                        printk("apcf bypass\r\n");
+                        pr_debug("apcf bypass\r\n");
                         ret = 1;
                     }
                 }
@@ -194,7 +194,7 @@ static int bypass_event(struct sk_buff *skb)
                     case HCI_LE_EXTENDED_ADVERTISING_REPORT_EVT:
                     {
                         if(aic_queue_cnt() > (QUEUE_SIZE-100)){
-                            printk("more adv report bypass\r\n");
+                            pr_debug("more adv report bypass\r\n");
                             ret = 1;
                         }
                     }
@@ -873,10 +873,10 @@ void bt_data_dump(char* tag, void* data, unsigned long len){
 	unsigned long i = 0;
 	uint8_t* data_ = (uint8_t* )data;
 
-	printk("%s %s len:(%lu)\r\n", __func__, tag, len);
+	pr_debug("%s %s len:(%lu)\r\n", __func__, tag, len);
 
 	for (i = 0; i < len; i += 16){
-	printk("%02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X %02X %02X %02X %02X %02X %02X\r\n",
+	pr_debug("%02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X %02X %02X %02X %02X %02X %02X\r\n",
 			data_[0 + i],
 			data_[1 + i],
 			data_[2 + i],
@@ -944,14 +944,11 @@ static ssize_t btchr_read(struct file *file_p,
 void btchr_external_write(char* buff, int len){
 	struct hci_dev *hdev;
 	struct sk_buff *skb;
-	int i;
 	struct btusb_data *data;
 
-	AICBT_INFO("%s \r\n", __func__);
-	for(i=0;i<len;i++){
-		printk("0x%x ",(u8)buff[i]);
-	}
-	printk("\r\n");
+	AICBT_INFO("%s", __func__);
+	print_hex_dump_debug("aic_btsdio: external_write ", DUMP_PREFIX_NONE,
+			     16, 1, buff, len, false);
 	hdev = hci_dev_get(0);
 	if (!hdev) {
 		AICBT_WARN("%s: Failed to get hci dev[Null]", __func__);
@@ -1037,7 +1034,7 @@ static ssize_t btchr_write(struct file *file_p,
 	//bt_data_dump("btwrite", skb->data, skb->len);
 	err = rwnx_sdio_bt_send_req(g_rwnx_plat->sdiodev->rwnx_hw, skb->len, skb);
 	if(err<0){
-		printk("%s rwnx_sdio_bt_send_req error %d",__func__,err);
+		AICBT_ERR("%s rwnx_sdio_bt_send_req error %d",__func__,err);
 	}
 
 	kfree_skb(skb);
@@ -1097,7 +1094,7 @@ static long btchr_ioctl(struct file *file_p,unsigned int cmd, unsigned long arg)
         return -ENODEV;
     }*/
 
-	printk("%s cmd support %d \n",__func__,cmd);
+	pr_debug("%s cmd support %d\n",__func__,cmd);
 
 #if 1
     if(check_set_dlfw_state_value(1) != 1) {

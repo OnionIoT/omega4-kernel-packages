@@ -34,6 +34,9 @@
 #define IEEE80211_MAX_CHAINS 4
 #endif
 
+#define RWNX_DEFAULT_NOISE_FLOOR_2GHZ (-89)
+#define RWNX_DEFAULT_NOISE_FLOOR_5GHZ (-92)
+
 u8 dhcped; // = 0;
 
 u16 tx_legrates_lut_rate[] = {
@@ -69,6 +72,46 @@ struct rwnx_legrate legrates_lut[] = {
 	[14] = { .idx = 7, .rate = 180},
 	[15] = { .idx = 5, .rate = 90},
 };
+
+static s8 rwnx_rx_default_noise_floor(u8 band)
+{
+	return (band == NL80211_BAND_2GHZ) ? RWNX_DEFAULT_NOISE_FLOOR_2GHZ :
+										 RWNX_DEFAULT_NOISE_FLOOR_5GHZ;
+}
+
+static s8 rwnx_rx_channel_noise(struct rwnx_hw *rwnx_hw,
+								struct phy_channel_info_desc *phy_info)
+{
+	struct ieee80211_supported_band *sband;
+	struct rwnx_survey_info *survey;
+	int band, ch, idx = 0;
+
+	if (!rwnx_hw->wiphy)
+		return rwnx_rx_default_noise_floor(phy_info->phy_band);
+
+	for (band = NL80211_BAND_2GHZ; band < NUM_NL80211_BANDS; band++) {
+		sband = rwnx_hw->wiphy->bands[band];
+		if (!sband)
+			continue;
+
+		for (ch = 0; ch < sband->n_channels; ch++, idx++) {
+			if (idx >= ARRAY_SIZE(rwnx_hw->survey))
+				return rwnx_rx_default_noise_floor(phy_info->phy_band);
+
+			if (sband->channels[ch].center_freq != phy_info->phy_prim20_freq)
+				continue;
+
+			survey = &rwnx_hw->survey[idx];
+			if ((survey->filled & SURVEY_INFO_NOISE_DBM) &&
+				survey->noise_dbm != 0)
+				return survey->noise_dbm;
+
+			return rwnx_rx_default_noise_floor(phy_info->phy_band);
+		}
+	}
+
+	return rwnx_rx_default_noise_floor(phy_info->phy_band);
+}
 
 #ifdef CONFIG_BAND_STEERING
 typedef struct _op_class_ {
@@ -1088,8 +1131,11 @@ static u8 rwnx_rx_rtap_hdrlen(struct rx_vector_1 *rxvect,
 	rtap_len++;
 
 	// Check if single antenna
-	if (hweight32(rxvect->antenna_set) == 1)
+	if (hweight32(rxvect->antenna_set) == 1) {
+		// IEEE80211_RADIOTAP_DBM_ANTNOISE
+		rtap_len++;
 		rtap_len++; //Single antenna
+	}
 
 	// padding for RX FLAGS
 	rtap_len = ALIGN(rtap_len, 2);
@@ -1276,13 +1322,16 @@ static void rwnx_rx_add_rtap_hdr(struct rwnx_hw *rwnx_hw,
 		rtap->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_DBM_ANTSIGNAL);
 		*pos++ = rxvect->rssi1;
 
+		// IEEE80211_RADIOTAP_DBM_ANTNOISE
+		rtap->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_DBM_ANTNOISE);
+		*pos++ = rwnx_rx_channel_noise(rwnx_hw, phy_info);
+
 		// IEEE80211_RADIOTAP_ANTENNA
 		rtap->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_ANTENNA);
 		*pos++ = rxvect->antenna_set;
 	}
 
 	// IEEE80211_RADIOTAP_LOCK_QUALITY is missing
-	// IEEE80211_RADIOTAP_DB_ANTNOISE is missing
 
 	// IEEE80211_RADIOTAP_RX_FLAGS
 	rtap->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_RX_FLAGS);

@@ -32,10 +32,19 @@
 #define O4L_DEFAULT_HT_MODE "HT20"
 #define O4L_DEFAULT_UDP_LISTEN 5601
 #define O4L_DEFAULT_UDP_DEST_PORT 5602
+#define O4L_DEFAULT_STATUS_INTERVAL_MS 1000
 #define IEEE80211_FTYPE_MGMT_ACTION 0x00d0
 #define O4L_FLAG_FEC_DATA 0x0001
 #define O4L_FLAG_FEC_PARITY 0x0002
 #define O4L_FEC_MAX_DATA 16
+#define RTAP_PRESENT_EXT 31
+#define RTAP_TSFT 0
+#define RTAP_FLAGS 1
+#define RTAP_RATE 2
+#define RTAP_CHANNEL 3
+#define RTAP_FHSS 4
+#define RTAP_DBM_ANTSIGNAL 5
+#define RTAP_DBM_ANTNOISE 6
 
 enum stream_id {
 	STREAM_VIDEO = 1,
@@ -89,10 +98,12 @@ struct config {
 	const char *freq_mhz;
 	const char *ht_mode;
 	const char *udp_dest_host;
+	const char *status_file;
 	uint16_t udp_listen_port;
 	uint16_t udp_dest_port;
 	uint8_t stream_id;
 	int interval_ms;
+	int status_interval_ms;
 	int count;
 	int fec_data;
 	int fec_parity;
@@ -105,11 +116,35 @@ struct stats {
 	uint64_t tx_bytes;
 	uint64_t rx_packets;
 	uint64_t rx_bytes;
+	uint64_t rx_frames;
+	uint64_t rx_frame_bytes;
 	uint64_t rx_bad;
+	uint64_t rx_lost;
+	uint64_t rx_out_of_order;
 	uint64_t fec_recovered;
 	uint64_t fec_unusable;
 	uint32_t last_rx_sequence;
+	uint64_t last_rx_us;
+	int last_rssi_dbm;
+	int min_rssi_dbm;
+	int max_rssi_dbm;
+	int64_t rssi_dbm_sum;
+	uint64_t rssi_samples;
+	int last_noise_dbm;
+	int64_t noise_dbm_sum;
+	uint64_t noise_samples;
 	bool have_rx_sequence;
+	bool have_rssi;
+	bool have_noise;
+};
+
+struct status_state {
+	uint64_t start_us;
+	uint64_t last_us;
+	uint64_t last_tx_packets;
+	uint64_t last_tx_bytes;
+	uint64_t last_rx_frames;
+	uint64_t last_rx_frame_bytes;
 };
 
 struct fec_tx_state {
@@ -186,11 +221,14 @@ static void usage(FILE *out)
 		"  --udp-dest HOST:PORT     UDP output for rx mode (default 127.0.0.1:%d)\n"
 		"  --stream ID              Stream id, 1 video, 2 mav a2g, 3 mav g2a, 4 control\n"
 		"  --fec DATA:PARITY        XOR FEC shards per block, PARITY must be 1 for now\n"
+		"  --status-file PATH       Write machine-readable link status JSON\n"
+		"  --status-interval-ms MS  Status file update interval (default %d)\n"
 		"  --interval-ms MS         Ping interval (default 1000)\n"
 		"  --count N                Stop ping mode after N packets (default unlimited)\n"
 		"  --verbose                Print each accepted packet\n",
 		O4L_DEFAULT_IFACE, O4L_DEFAULT_FREQ_MHZ, O4L_DEFAULT_HT_MODE,
-		O4L_DEFAULT_UDP_LISTEN, O4L_DEFAULT_UDP_DEST_PORT);
+		O4L_DEFAULT_UDP_LISTEN, O4L_DEFAULT_UDP_DEST_PORT,
+		O4L_DEFAULT_STATUS_INTERVAL_MS);
 }
 
 static int run_cmd(const char *const argv[])
@@ -392,17 +430,342 @@ static bool parse_frame(const uint8_t *frame, size_t frame_len, struct o4l_hdr *
 	return true;
 }
 
+static size_t align_rtap(size_t off, size_t align)
+{
+	if (align <= 1)
+		return off;
+	return (off + align - 1) & ~(align - 1);
+}
+
+static bool rtap_field_layout(unsigned int bit, size_t *align, size_t *size)
+{
+	switch (bit) {
+	case RTAP_TSFT:
+		*align = 8;
+		*size = 8;
+		return true;
+	case RTAP_FLAGS:
+	case RTAP_RATE:
+	case RTAP_DBM_ANTSIGNAL:
+	case RTAP_DBM_ANTNOISE:
+		*align = 1;
+		*size = 1;
+		return true;
+	case RTAP_CHANNEL:
+		*align = 2;
+		*size = 4;
+		return true;
+	case RTAP_FHSS:
+		*align = 2;
+		*size = 2;
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void stats_update_signal(struct stats *st, int rssi_dbm,
+				bool have_noise, int noise_dbm)
+{
+	st->last_rssi_dbm = rssi_dbm;
+	st->rssi_dbm_sum += rssi_dbm;
+	st->rssi_samples++;
+	if (!st->have_rssi || rssi_dbm < st->min_rssi_dbm)
+		st->min_rssi_dbm = rssi_dbm;
+	if (!st->have_rssi || rssi_dbm > st->max_rssi_dbm)
+		st->max_rssi_dbm = rssi_dbm;
+	st->have_rssi = true;
+
+	if (have_noise) {
+		st->last_noise_dbm = noise_dbm;
+		st->noise_dbm_sum += noise_dbm;
+		st->noise_samples++;
+		st->have_noise = true;
+	}
+}
+
+static void parse_radiotap_signal(const uint8_t *frame, size_t frame_len,
+				  struct stats *st)
+{
+	uint16_t rt_len;
+	uint32_t present;
+	size_t off;
+	bool have_rssi = false;
+	bool have_noise = false;
+	int rssi_dbm = 0;
+	int noise_dbm = 0;
+
+	if (frame_len < sizeof(struct radiotap_hdr))
+		return;
+	rt_len = le16toh(*(const uint16_t *)(frame + 2));
+	if (rt_len < sizeof(struct radiotap_hdr) || rt_len > frame_len)
+		return;
+
+	present = le32toh(*(const uint32_t *)(frame + 4));
+	off = sizeof(struct radiotap_hdr);
+	while (present & (1u << RTAP_PRESENT_EXT)) {
+		if (off + sizeof(uint32_t) > rt_len)
+			return;
+		present = le32toh(*(const uint32_t *)(frame + off));
+		off += sizeof(uint32_t);
+	}
+
+	present = le32toh(*(const uint32_t *)(frame + 4));
+	for (unsigned int bit = 0; bit <= RTAP_DBM_ANTNOISE; bit++) {
+		size_t align;
+		size_t size;
+
+		if (!(present & (1u << bit)))
+			continue;
+		if (!rtap_field_layout(bit, &align, &size))
+			return;
+		off = align_rtap(off, align);
+		if (off + size > rt_len)
+			return;
+		if (bit == RTAP_DBM_ANTSIGNAL) {
+			rssi_dbm = (int)*(const int8_t *)(frame + off);
+			have_rssi = true;
+		} else if (bit == RTAP_DBM_ANTNOISE) {
+			noise_dbm = (int)*(const int8_t *)(frame + off);
+			have_noise = true;
+		}
+		off += size;
+	}
+
+	if (have_rssi)
+		stats_update_signal(st, rssi_dbm, have_noise, noise_dbm);
+}
+
 static void print_stats(const struct stats *st)
 {
+	uint64_t expected = st->rx_frames + st->rx_lost;
+	double quality = expected ? (100.0 * (double)st->rx_frames / (double)expected) : 0.0;
+
 	fprintf(stderr,
-		"stats tx=%llu/%lluB rx=%llu/%lluB bad=%llu fec_recovered=%llu fec_unusable=%llu\n",
+		"stats tx=%llu/%lluB rx=%llu/%lluB rf_rx=%llu lost=%llu quality=%.1f%% ",
 		(unsigned long long)st->tx_packets,
 		(unsigned long long)st->tx_bytes,
 		(unsigned long long)st->rx_packets,
 		(unsigned long long)st->rx_bytes,
+		(unsigned long long)st->rx_frames,
+		(unsigned long long)st->rx_lost,
+		quality);
+	if (st->have_rssi)
+		fprintf(stderr, "rssi=%ddBm ", st->last_rssi_dbm);
+	else
+		fprintf(stderr, "rssi=n/a ");
+	fprintf(stderr,
+		"bad=%llu fec_recovered=%llu fec_unusable=%llu\n",
 		(unsigned long long)st->rx_bad,
 		(unsigned long long)st->fec_recovered,
 		(unsigned long long)st->fec_unusable);
+}
+
+static double clamp_unit(double value)
+{
+	if (value < 0.0)
+		return 0.0;
+	if (value > 1.0)
+		return 1.0;
+	return value;
+}
+
+static bool calc_signal_quality(const struct stats *st, double rx_quality_pct,
+				double rssi_avg, double noise_avg,
+				double *quality_pct)
+{
+	uint64_t expected = st->rx_frames + st->rx_lost;
+	double pdr;
+	double rssi_norm;
+	double signal_norm;
+	double score;
+
+	if (!expected && !st->have_rssi)
+		return false;
+
+	pdr = expected ? clamp_unit(rx_quality_pct / 100.0) : 1.0;
+
+	if (!st->have_rssi) {
+		signal_norm = 0.0;
+	} else {
+		rssi_norm = clamp_unit((rssi_avg + 90.0) / 40.0);
+		if (st->have_noise) {
+			double snr_avg = rssi_avg - noise_avg;
+			double snr_norm = clamp_unit((snr_avg - 5.0) / 25.0);
+
+			signal_norm = 0.7 * snr_norm + 0.3 * rssi_norm;
+		} else {
+			signal_norm = rssi_norm;
+		}
+	}
+
+	score = clamp_unit(0.65 * pdr + 0.35 * signal_norm);
+	*quality_pct = score * 100.0;
+	return true;
+}
+
+static void json_string(FILE *f, const char *s)
+{
+	fputc('"', f);
+	for (; *s; s++) {
+		unsigned char c = (unsigned char)*s;
+
+		if (c == '"' || c == '\\')
+			fprintf(f, "\\%c", c);
+		else if (c >= 0x20)
+			fputc(c, f);
+		else
+			fprintf(f, "\\u%04x", c);
+	}
+	fputc('"', f);
+}
+
+static int write_status_file(const struct config *cfg, const struct stats *st,
+			     struct status_state *status, uint64_t now_us)
+{
+	char tmp_path[512];
+	FILE *f;
+	double dt = 0.0;
+	double tx_pps = 0.0;
+	double tx_bps = 0.0;
+	double rx_pps = 0.0;
+	double rx_bps = 0.0;
+	double rx_quality = 0.0;
+	uint64_t expected;
+	double rssi_avg = 0.0;
+	double noise_avg = 0.0;
+	double signal_quality_pct = 0.0;
+	bool have_signal_quality;
+
+	if (!cfg->status_file)
+		return 0;
+	if (!status->start_us)
+		status->start_us = now_us;
+	if (status->last_us) {
+		uint64_t interval_us = (uint64_t)cfg->status_interval_ms * 1000ull;
+
+		if (now_us - status->last_us < interval_us)
+			return 0;
+		dt = (double)(now_us - status->last_us) / 1000000.0;
+	}
+
+	if (dt > 0.0) {
+		tx_pps = (double)(st->tx_packets - status->last_tx_packets) / dt;
+		tx_bps = (double)(st->tx_bytes - status->last_tx_bytes) * 8.0 / dt;
+		rx_pps = (double)(st->rx_frames - status->last_rx_frames) / dt;
+		rx_bps = (double)(st->rx_frame_bytes - status->last_rx_frame_bytes) * 8.0 / dt;
+	}
+
+	expected = st->rx_frames + st->rx_lost;
+	if (expected)
+		rx_quality = 100.0 * (double)st->rx_frames / (double)expected;
+	if (st->rssi_samples)
+		rssi_avg = (double)st->rssi_dbm_sum / (double)st->rssi_samples;
+	if (st->noise_samples)
+		noise_avg = (double)st->noise_dbm_sum / (double)st->noise_samples;
+	have_signal_quality = calc_signal_quality(st, rx_quality, rssi_avg,
+						   noise_avg,
+						   &signal_quality_pct);
+
+	if (snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%ld",
+		     cfg->status_file, (long)getpid()) >= (int)sizeof(tmp_path)) {
+		errno = ENAMETOOLONG;
+		perror("status path");
+		return -1;
+	}
+
+	f = fopen(tmp_path, "w");
+	if (!f) {
+		perror("status fopen");
+		return -1;
+	}
+
+	fprintf(f, "{\n");
+	fprintf(f, "  \"mode\": ");
+	json_string(f, cfg->mode);
+	fprintf(f, ",\n  \"iface\": ");
+	json_string(f, cfg->iface);
+	fprintf(f, ",\n");
+	fprintf(f, "  \"stream\": %u,\n", cfg->stream_id);
+	fprintf(f, "  \"uptime_ms\": %llu,\n",
+		(unsigned long long)((now_us - status->start_us) / 1000ull));
+	fprintf(f, "  \"tx_packets\": %llu,\n", (unsigned long long)st->tx_packets);
+	fprintf(f, "  \"tx_bytes\": %llu,\n", (unsigned long long)st->tx_bytes);
+	fprintf(f, "  \"tx_pps\": %.2f,\n", tx_pps);
+	fprintf(f, "  \"tx_bps\": %.2f,\n", tx_bps);
+	fprintf(f, "  \"rx_packets\": %llu,\n", (unsigned long long)st->rx_packets);
+	fprintf(f, "  \"rx_bytes\": %llu,\n", (unsigned long long)st->rx_bytes);
+	fprintf(f, "  \"rx_frames\": %llu,\n", (unsigned long long)st->rx_frames);
+	fprintf(f, "  \"rx_frame_bytes\": %llu,\n", (unsigned long long)st->rx_frame_bytes);
+	fprintf(f, "  \"rx_pps\": %.2f,\n", rx_pps);
+	fprintf(f, "  \"rx_bps\": %.2f,\n", rx_bps);
+	fprintf(f, "  \"rx_lost\": %llu,\n", (unsigned long long)st->rx_lost);
+	fprintf(f, "  \"rx_out_of_order\": %llu,\n",
+		(unsigned long long)st->rx_out_of_order);
+	fprintf(f, "  \"rx_quality_pct\": %.2f,\n", rx_quality);
+	if (have_signal_quality) {
+		fprintf(f, "  \"signal_quality_pct\": %.2f,\n",
+			signal_quality_pct);
+	} else {
+		fprintf(f, "  \"signal_quality_pct\": null,\n");
+	}
+	fprintf(f, "  \"rx_bad\": %llu,\n", (unsigned long long)st->rx_bad);
+	if (st->have_rssi) {
+		fprintf(f, "  \"rssi_dbm\": %d,\n", st->last_rssi_dbm);
+		fprintf(f, "  \"rssi_avg_dbm\": %.2f,\n", rssi_avg);
+		fprintf(f, "  \"rssi_min_dbm\": %d,\n", st->min_rssi_dbm);
+		fprintf(f, "  \"rssi_max_dbm\": %d,\n", st->max_rssi_dbm);
+		fprintf(f, "  \"rssi_samples\": %llu,\n",
+			(unsigned long long)st->rssi_samples);
+	} else {
+		fprintf(f, "  \"rssi_dbm\": null,\n");
+		fprintf(f, "  \"rssi_avg_dbm\": null,\n");
+		fprintf(f, "  \"rssi_min_dbm\": null,\n");
+		fprintf(f, "  \"rssi_max_dbm\": null,\n");
+		fprintf(f, "  \"rssi_samples\": 0,\n");
+	}
+	if (st->have_noise) {
+		fprintf(f, "  \"noise_dbm\": %d,\n", st->last_noise_dbm);
+		fprintf(f, "  \"noise_avg_dbm\": %.2f,\n", noise_avg);
+		fprintf(f, "  \"snr_db\": %d,\n", st->last_rssi_dbm - st->last_noise_dbm);
+		fprintf(f, "  \"snr_avg_db\": %.2f,\n", rssi_avg - noise_avg);
+	} else {
+		fprintf(f, "  \"noise_dbm\": null,\n");
+		fprintf(f, "  \"noise_avg_dbm\": null,\n");
+		fprintf(f, "  \"snr_db\": null,\n");
+		fprintf(f, "  \"snr_avg_db\": null,\n");
+	}
+	fprintf(f, "  \"fec_recovered\": %llu,\n",
+		(unsigned long long)st->fec_recovered);
+	fprintf(f, "  \"fec_unusable\": %llu,\n",
+		(unsigned long long)st->fec_unusable);
+	if (st->have_rx_sequence) {
+		fprintf(f, "  \"last_rx_sequence\": %u,\n", st->last_rx_sequence);
+		fprintf(f, "  \"last_rx_age_ms\": %llu\n",
+			(unsigned long long)((now_us - st->last_rx_us) / 1000ull));
+	} else {
+		fprintf(f, "  \"last_rx_sequence\": null,\n");
+		fprintf(f, "  \"last_rx_age_ms\": null\n");
+	}
+	fprintf(f, "}\n");
+
+	if (fclose(f) != 0) {
+		perror("status fclose");
+		unlink(tmp_path);
+		return -1;
+	}
+	if (rename(tmp_path, cfg->status_file) != 0) {
+		perror("status rename");
+		unlink(tmp_path);
+		return -1;
+	}
+
+	status->last_us = now_us;
+	status->last_tx_packets = st->tx_packets;
+	status->last_tx_bytes = st->tx_bytes;
+	status->last_rx_frames = st->rx_frames;
+	status->last_rx_frame_bytes = st->rx_frame_bytes;
+	return 0;
 }
 
 static int tx_payload_flags(int raw_fd, const struct config *cfg, struct stats *st,
@@ -494,6 +857,7 @@ static int tx_fec_data(int raw_fd, const struct config *cfg, struct stats *st,
 static int tx_loop(int raw_fd, const struct config *cfg)
 {
 	struct stats st = {0};
+	struct status_state status = {0};
 	struct fec_tx_state fec = {0};
 	uint32_t sequence = 0;
 	uint8_t payload[O4L_MAX_PAYLOAD];
@@ -529,6 +893,7 @@ static int tx_loop(int raw_fd, const struct config *cfg)
 			last_stats = time(NULL);
 			print_stats(&st);
 		}
+		write_status_file(cfg, &st, &status, monotonic_us());
 	}
 	close(udp_fd);
 	return 0;
@@ -537,6 +902,7 @@ static int tx_loop(int raw_fd, const struct config *cfg)
 static int ping_loop(int raw_fd, const struct config *cfg)
 {
 	struct stats st = {0};
+	struct status_state status = {0};
 	uint32_t sequence = 0;
 	time_t last_stats = time(NULL);
 
@@ -551,6 +917,7 @@ static int ping_loop(int raw_fd, const struct config *cfg)
 			last_stats = time(NULL);
 			print_stats(&st);
 		}
+		write_status_file(cfg, &st, &status, monotonic_us());
 		usleep((useconds_t)cfg->interval_ms * 1000u);
 	}
 	return 0;
@@ -711,6 +1078,7 @@ static int rx_loop(int raw_fd, const struct config *cfg)
 {
 	struct sockaddr_in udp_dest;
 	struct stats st = {0};
+	struct status_state status = {0};
 	struct fec_rx_state fec = {0};
 	uint8_t frame[O4L_MAX_FRAME];
 	int udp_fd = udp_tx_socket(cfg->udp_dest_host, cfg->udp_dest_port, &udp_dest);
@@ -747,6 +1115,7 @@ static int rx_loop(int raw_fd, const struct config *cfg)
 			}
 			if (hdr.stream_id != cfg->stream_id && cfg->stream_id != 0)
 				continue;
+			parse_radiotap_signal(frame, (size_t)n, &st);
 			payload_len = ntohs(hdr.payload_len);
 			sequence = ntohl(hdr.sequence);
 			flags = ntohs(hdr.reserved);
@@ -754,10 +1123,26 @@ static int rx_loop(int raw_fd, const struct config *cfg)
 				fprintf(stderr, "rx stream=%u seq=%u len=%u flags=0x%04x\n",
 					hdr.stream_id, sequence, payload_len, flags);
 			}
-			if (st.have_rx_sequence && sequence != st.last_rx_sequence + 1)
-				fprintf(stderr, "rx gap: last=%u now=%u\n", st.last_rx_sequence, sequence);
-			st.have_rx_sequence = true;
-			st.last_rx_sequence = sequence;
+			st.rx_frames++;
+			st.rx_frame_bytes += payload_len;
+			st.last_rx_us = monotonic_us();
+			if (st.have_rx_sequence) {
+				int32_t diff = (int32_t)(sequence - st.last_rx_sequence);
+
+				if (diff > 0) {
+					if (diff > 1) {
+						st.rx_lost += (uint64_t)(diff - 1);
+						fprintf(stderr, "rx gap: last=%u now=%u lost=%d\n",
+							st.last_rx_sequence, sequence, diff - 1);
+					}
+					st.last_rx_sequence = sequence;
+				} else {
+					st.rx_out_of_order++;
+				}
+			} else {
+				st.have_rx_sequence = true;
+				st.last_rx_sequence = sequence;
+			}
 			if (flags & (O4L_FLAG_FEC_DATA | O4L_FLAG_FEC_PARITY)) {
 				if (cfg->fec_data <= 0) {
 					st.rx_bad++;
@@ -776,6 +1161,7 @@ static int rx_loop(int raw_fd, const struct config *cfg)
 			last_stats = time(NULL);
 			print_stats(&st);
 		}
+		write_status_file(cfg, &st, &status, monotonic_us());
 	}
 	close(udp_fd);
 	return 0;
@@ -827,6 +1213,7 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 	cfg->udp_dest_port = O4L_DEFAULT_UDP_DEST_PORT;
 	cfg->stream_id = STREAM_TEST;
 	cfg->interval_ms = 1000;
+	cfg->status_interval_ms = O4L_DEFAULT_STATUS_INTERVAL_MS;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
@@ -857,6 +1244,12 @@ static int parse_args(int argc, char **argv, struct config *cfg)
 			cfg->stream_id = (uint8_t)stream;
 		} else if (!strcmp(argv[i], "--fec") && i + 1 < argc) {
 			if (parse_fec(argv[++i], &cfg->fec_data, &cfg->fec_parity) != 0)
+				return -1;
+		} else if (!strcmp(argv[i], "--status-file") && i + 1 < argc) {
+			cfg->status_file = argv[++i];
+		} else if (!strcmp(argv[i], "--status-interval-ms") && i + 1 < argc) {
+			cfg->status_interval_ms = atoi(argv[++i]);
+			if (cfg->status_interval_ms <= 0)
 				return -1;
 		} else if (!strcmp(argv[i], "--interval-ms") && i + 1 < argc) {
 			cfg->interval_ms = atoi(argv[++i]);
