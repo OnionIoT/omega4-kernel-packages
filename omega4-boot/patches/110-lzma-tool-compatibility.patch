@@ -1,0 +1,11 @@
+--- a/u-boot/arch/arm/mach-rockchip/fit_nodes.sh
++++ b/u-boot/arch/arm/mach-rockchip/fit_nodes.sh
+@@ -27,7 +27,7 @@
+ 	COMPRESS_CMD="gzip -kf9"
+ elif [ "${COMPRESSION}" == "lzma" ]; then
+ 	SUFFIX=".lzma"
+-	COMPRESS_CMD="${srctree}/scripts/compress.sh lzma"
++	COMPRESS_CMD="python3 ${srctree}/scripts/omega4-compress.py"
+ else
+ 	COMPRESSION="none"
+ 	SUFFIX=
