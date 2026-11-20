@@ -1,0 +1,108 @@
+# Omega4+ boot package
+
+`omega4p-boot` builds U-Boot and SPL using the OpenWrt ARM toolchain and
+packages the Omega4+ USB downloader and NAND idblock. It is a `bin` build
+package: no IPK is installed on the device and no flashing happens at build
+time. Normal sysupgrade continues to preserve the bootloader and environment.
+
+## Build
+
+The Omega4+ profile selects this package by default. From the OpenWrt root:
+
+```sh
+./scripts/feeds update omega4ko
+./scripts/feeds install omega4p-boot
+make defconfig
+make package/omega4p-boot/compile -j20 V=s
+```
+
+Use the local feed name from `feeds.conf` (`omega4ko` in this workspace;
+`omega4_kernel_packages` in `feeds.conf.default`). A normal `make -j20` also
+builds the package once the feed is installed and the profile selected.
+
+Outputs are in `bin/targets/rockchip/cortexa7/omega4p-boot/`:
+
+- `download.bin`: USB DDR initialization and flashing runtime, plus boot payloads.
+- `idblock.img`: NAND boot payloads, including DDR initialization, MCU and SPL.
+- `uboot.img`: vendor U-Boot FIT, including its configured trust payload.
+- `SHA256SUMS`, `build-info.json`, and license notices.
+
+The build currently requires the reference SDK **Git checkout**, defaulting to
+`../../ref/1103B-SDK` relative to the OpenWrt root. Change
+`CONFIG_OMEGA4P_BOOT_SDK_DIR` in menuconfig for another location. No SDK compiler,
+kernel build, or finished bootloader image is used. `prepare.py` exports only
+the committed `sysdrv/source/uboot` subtree at SDK revision
+`e89cd37b1e87acb3f76c793c41a14e2efb2e77d6` into OpenWrt's private build directory.
+SDK working-tree edits, stale objects and generated configuration are excluded;
+the reference checkout is never written. This is a local-source package, not
+yet an independently downloadable source release.
+
+The SDK host packing tool is an x86-64 Linux executable. Host requirements
+include Git, Python 3, tar, Bash, DTC and the usual U-Boot host build dependencies.
+OpenWrt GCC 13 needs the small compatibility patch included here: match the
+`cmd_process` enum declaration and explicitly guard uninitialized pinctrl
+lookup pointers. The script inherits OpenWrt's parallel make jobserver.
+
+## Pinned inputs
+
+The working SDK release is
+`output/rv1106b-256nand-256ram-ddr667-v107-uart115200/`.
+
+| Input | Provenance |
+| --- | --- |
+| U-Boot/SPL, USB plug, trust binary, packing tool | Pinned SDK Git revision above |
+| `files/omega4p_defconfig` | SDK `rv1106b-tb-spi-nand-uart115200_defconfig` |
+| `files/ddr.bin` | Working release's configured DDR v1.07, 667 MHz, UART 115200 |
+| `files/hpmcu.bin` | `Hpmcu.bin` extracted from the working release's `download.bin` |
+
+DDR source upstream was Rockchip rkbin commit
+`3e288fe814e059dd06833495f845cab04ac20a5c`,
+`rv1103b_ddr_924MHz_tb_v1.07.bin`, SHA256
+`20659d447bb47262f116d8041f4bffda8f3ceba19e9fab40405f8f05b867de58`.
+The SDK configured it for 667 MHz and UART 115200 and added its identifying
+banner. We retain the exact tested result:
+`c88ff2396becbed8621c65579028c77fb832a1281c662cbc9c23ccc797f5fa9e`.
+
+The MCU input is the SDK's RT-Thread firmware, not the stock rkbin MCU image.
+Its extracted/padded SHA256 is
+`1a8be624e8e3745e285717aec6c6de3fa6fcdb480a92c236d96b7c6ba2527e49`.
+This package retains that prebuilt firmware; it does not rebuild the MCU.
+The DDR/rkbin terms and RT-Thread Apache license are preserved under `files/`.
+U-Boot licensing is recorded in the exported source's `Licenses/README`.
+
+## Verification and use
+
+Every build unpacks the new downloader and compares USB DDR, NAND DDR, MCU,
+USB plug and SPL against their inputs. SPL must match the newly compiled
+`spl/u-boot-spl.bin`; it cannot silently fall back to the SDK SPL blob.
+Regenerating idblock from download.bin must match the emitted idblock exactly.
+The build also checks image capacities and U-Boot FIT magic, then records
+image hashes and source/configuration provenance. Hardware validation is not
+inferred from these checks: new manifests start with `hardware_validated=false`.
+
+To bundle these images with the OpenWrt kernel/rootfs:
+
+```sh
+python3 scripts/omega4p/bundle.py \
+  --boot-dir bin/targets/rockchip/cortexa7/omega4p-boot \
+  --images bin/targets/rockchip/cortexa7 \
+  --output bin/targets/rockchip/cortexa7/omega4p-package-bundle
+```
+
+Keep a known-working loader and backup before testing. For an existing
+Omega4+ OpenWrt installation, only idblock and U-Boot need writing to test this
+package: byte offsets `0x40000` and `0x140000`, capacities 1 MiB and 2 MiB.
+Use the new `download.bin` for the USB runtime. Preserve env, meta, kernel,
+rootfs and Ethernet settings. Detailed hardware results belong in the workspace
+`hardware-validation/omega4p-boot/` directory.
+
+## Hardware result — 19 November 2026
+
+Tested on A29C using the existing screen console. New USB downloader worked;
+idblock/U-Boot flash readbacks matched. Normal boot, cold boot, persistent
+overlay and the Ctrl+C U-Boot console path passed. U-Boot reports OpenWrt GCC
+13.3.0. Ethernet negotiated 100 Mb/s and gateway ping passed; Wi-Fi scan worked.
+Environment and network configuration hashes were preserved. A pre-flash UBI
+read timeout was recorded on the old installation and did not recur in these
+tests. Camera/audio remain outside this package's validation. Full evidence:
+`hardware-validation/omega4p-boot/REPORT.md` in the workspace.

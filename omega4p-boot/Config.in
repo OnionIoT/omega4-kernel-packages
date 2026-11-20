@@ -1,0 +1,8 @@
+config OMEGA4P_BOOT_SDK_DIR
+	string "Reference 1103B SDK Git checkout"
+	depends on PACKAGE_omega4p-boot
+	default "../../ref/1103B-SDK"
+	help
+	  Path relative to the OpenWrt root, or an absolute path. Only the pinned
+	  committed U-Boot/rkbin sources are exported; SDK build outputs and local
+	  source edits are not used. The reference checkout is never modified.

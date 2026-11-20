@@ -1,0 +1,107 @@
+--- a/u-boot/include/command.h
++++ b/u-boot/include/command.h
+@@ -139,7 +139,7 @@
+  *			number of ticks the command took to complete.
+  * @return 0 if the command succeeded, 1 if it failed
+  */
+-int cmd_process(int flag, int argc, char * const argv[],
++enum command_ret_t cmd_process(int flag, int argc, char * const argv[],
+ 			       int *repeatable, unsigned long *ticks);
+ 
+ void fixup_cmdtable(cmd_tbl_t *cmdtp, int size);
+--- a/u-boot/drivers/pinctrl/pinctrl-rockchip.c
++++ b/u-boot/drivers/pinctrl/pinctrl-rockchip.c
+@@ -874,7 +874,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_recalced_data *data;
++	struct rockchip_mux_recalced_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_recalced; i++) {
+@@ -884,7 +884,7 @@
+ 			break;
+ 	}
+ 
+-	if (i >= ctrl->niomux_recalced)
++	if (!data || i >= ctrl->niomux_recalced)
+ 		return;
+ 
+ 	*reg = data->reg;
+@@ -1606,7 +1606,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_route_data *data;
++	struct rockchip_mux_route_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_routes; i++) {
+@@ -1616,7 +1616,7 @@
+ 			break;
+ 	}
+ 
+-	if (i >= ctrl->niomux_routes)
++	if (!data || i >= ctrl->niomux_routes)
+ 		return ROUTE_TYPE_INVALID;
+ 
+ 	*reg = data->route_offset;
+--- a/u-boot/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c
++++ b/u-boot/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c
+@@ -42,7 +42,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_recalced_data *data;
++	struct rockchip_mux_recalced_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_recalced; i++) {
+@@ -52,7 +52,7 @@
+ 			break;
+ 	}
+ 
+-	if (i >= ctrl->niomux_recalced)
++	if (!data || i >= ctrl->niomux_recalced)
+ 		return;
+ 
+ 	*reg = data->reg;
+@@ -66,7 +66,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_route_data *data;
++	struct rockchip_mux_route_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_routes; i++) {
+@@ -76,7 +76,7 @@
+ 			break;
+ 	}
+ 
+-	if (i >= ctrl->niomux_routes)
++	if (!data || i >= ctrl->niomux_routes)
+ 		return ROUTE_TYPE_INVALID;
+ 
+ 	*reg = data->route_offset;
+--- a/u-boot/make.sh
++++ b/u-boot/make.sh
+@@ -6,7 +6,7 @@
+ #
+ 
+ set -e
+-JOB=`sed -n "N;/processor/p" /proc/cpuinfo|wc -l`
++# Inherit the OpenWrt make jobserver instead of choosing a host-wide job count.
+ SUPPORT_LIST=`ls configs/*[r,p][x,v,k][0-9][0-9]*_defconfig`
+ CMD_ARGS=$1
+ 
+@@ -803,7 +803,7 @@
+ handle_args_late
+ sub_commands
+ clean_files
+-make PYTHON=python2 ${ARG_SPL_FWVER} ${ARG_FWVER} CROSS_COMPILE=${TOOLCHAIN} all --jobs=${JOB}
++make PYTHON=python3 ${ARG_SPL_FWVER} ${ARG_FWVER} CROSS_COMPILE=${TOOLCHAIN} all
+ pack_images
+ finish
+ echo ${TOOLCHAIN}
