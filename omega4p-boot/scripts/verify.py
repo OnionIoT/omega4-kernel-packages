@@ -5,7 +5,9 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import struct
 import subprocess
+import zlib
 
 from prepare import BLOBS, REVISION
 
@@ -31,12 +33,23 @@ def main():
     verify = build / "verify"
     shutil.rmtree(verify, ignore_errors=True)
     verify.mkdir()
+    env_source = Path(__file__).resolve().parent.parent / "files/uboot.env"
+    env_image = build / "env.img"
+    subprocess.run([str(uboot / "tools/mkenvimage"), "-s", "0x40000", "-p", "0x0",
+                    "-o", str(env_image), str(env_source)], check=True)
+    env = env_image.read_bytes()
+    if len(env) != 0x40000 or struct.unpack("<I", env[:4])[0] != zlib.crc32(env[4:]):
+        raise ValueError("Invalid environment size or CRC")
+    expected = b"\0".join(env_source.read_bytes().splitlines()) + b"\0\0"
+    if env[4:] != expected.ljust(0x40000 - 4, b"\0"):
+        raise ValueError("Environment payload differs from board configuration")
     source = {
+        "env.img": env_image,
         "download.bin": uboot / "rv1103b_download_v1.07.000.bin",
         "idblock.img": uboot / "rv1103b_idblock_v1.07.000.img",
         "uboot.img": uboot / "uboot.img",
     }
-    limits = {"download.bin": 1024 * 1024, "idblock.img": 1024 * 1024,
+    limits = {"env.img": 0x40000, "download.bin": 1024 * 1024, "idblock.img": 1024 * 1024,
               "uboot.img": 2 * 1024 * 1024}
     for name, path in source.items():
         if not 0 < path.stat().st_size <= limits[name]:
@@ -64,6 +77,7 @@ def main():
         "board": "onion,rv1106b-omega4p-evb",
         "sdk_commit": REVISION,
         "vendor_inputs": BLOBS,
+        "environment_source_sha256": sha256(env_source),
         "uboot_config_sha256": sha256(uboot / ".config"),
         "spl_sha256": sha256(uboot / "spl/u-boot-spl.bin"),
         "ddr": {"version": "1.07", "configured_mhz": 667, "uart_baud": 115200},

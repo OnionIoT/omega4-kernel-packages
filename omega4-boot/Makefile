@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=omega4-boot
 PKG_VERSION:=2017.09-e89cd37b
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0+
 PKG_LICENSE_FILES:=u-boot/Licenses/README rkbin/LICENSE
 PKG_BUILD_PARALLEL:=1
@@ -20,7 +20,7 @@ export GCC_HONOUR_COPTS=s
 define Package/omega4-boot
   SECTION:=boot
   CATEGORY:=Boot Loaders
-  TITLE:=Omega4 DDR loader, SPL and U-Boot
+  TITLE:=Omega4 DDR loader, SPL, U-Boot and environment
   DEPENDS:=@TARGET_rockchip_cortexa7 @!IN_SDK
   DEFAULT:=y if TARGET_rockchip_cortexa7_DEVICE_onion_omega4-evb
 endef

@@ -88,3 +88,22 @@ Host validation passed on 19 November 2026: package compilation, unpacked
 loader checks, idblock regeneration, compiled U-Boot/DTB comparison, empty
 payload rejection, output hashes and per-board default package selection.
 Hardware validation was explicitly deferred until an original Omega4 is available.
+
+## Boot environment (package release 2)
+
+The package also builds `env.img` from `files/uboot.env` with the compiled
+U-Boot `mkenvimage`: 256 KiB, CRC32 header, zero padding. Verification checks
+size, CRC and exact payload. SHA256SUMS and build-info.json include env.img
+and the environment source hash. OpenWrt image generation copies this artifact
+rather than generating another environment from a separate template.
+
+Include env.img at byte offset zero for initial USB provisioning: SPL needs its
+partition table, including on Omega4+. A blank environment fails before loading
+Linux. Full web flashing selects this image by default. Deselect it to preserve
+a provisioned MAC and boot settings; normal sysupgrade continues to preserve it.
+
+Both packages were rebuilt and host-verified on 20 November 2026. Environment
+images match the previous v0.0.15 release bytes exactly. The Omega4+ environment
+was written, read back in full and used to boot the previously blank board to
+OpenWrt 0.0.15 with a writable UBIFS overlay. The newly repacked boot binaries
+were host-verified; original Omega4 hardware validation remains deferred.
