@@ -1036,13 +1036,13 @@ static int rkisp1_plat_probe(struct platform_device *pdev)
 	rkisp1_stream_init(isp_dev, RKISP1_STREAM_MP);
 	rkisp1_stream_init(isp_dev, RKISP1_STREAM_RAW);
 
-	strlcpy(isp_dev->media_dev.model, "rkisp1",
+	strscpy(isp_dev->media_dev.model, "rkisp1",
 		sizeof(isp_dev->media_dev.model));
 	isp_dev->media_dev.dev = &pdev->dev;
 	isp_dev->media_dev.ops = &rkisp1_media_ops;
 	v4l2_dev = &isp_dev->v4l2_dev;
 	v4l2_dev->mdev = &isp_dev->media_dev;
-	strlcpy(v4l2_dev->name, "rkisp1", sizeof(v4l2_dev->name));
+	strscpy(v4l2_dev->name, "rkisp1", sizeof(v4l2_dev->name));
 	v4l2_ctrl_handler_init(&isp_dev->ctrl_handler, 5);
 	v4l2_dev->ctrl_handler = &isp_dev->ctrl_handler;
 
@@ -1094,7 +1094,7 @@ err_unreg_v4l2_dev:
 	return ret;
 }
 
-static int rkisp1_plat_remove(struct platform_device *pdev)
+static void rkisp1_plat_remove(struct platform_device *pdev)
 {
 	struct rkisp1_device *isp_dev = platform_get_drvdata(pdev);
 
@@ -1108,7 +1108,7 @@ static int rkisp1_plat_remove(struct platform_device *pdev)
 	rkisp1_unregister_isp_subdev(isp_dev);
 	media_device_cleanup(&isp_dev->media_dev);
 
-	return 0;
+	return;
 }
 
 static int __maybe_unused rkisp1_runtime_suspend(struct device *dev)
@@ -1166,7 +1166,7 @@ static struct platform_driver rkisp1_plat_drv = {
 		   .pm = &rkisp1_plat_pm_ops,
 	},
 	.probe = rkisp1_plat_probe,
-	.remove = rkisp1_plat_remove,
+	.remove_new = rkisp1_plat_remove,
 };
 
 module_platform_driver(rkisp1_plat_drv);

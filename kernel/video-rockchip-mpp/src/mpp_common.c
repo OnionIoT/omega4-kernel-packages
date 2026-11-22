@@ -11,6 +11,11 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/file.h>
+#ifndef fd_file
+#define fd_file(f) ((f).file)
+#endif
+
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
@@ -1552,7 +1557,7 @@ next:
 			goto session_switch_done;
 
 		f = fdget(bat_msg.fd);
-		if (!f.file) {
+		if (!fd_file(f)) {
 			int ret = -EBADF;
 
 			mpp_err("fd %d get session failed\n", bat_msg.fd);
@@ -1573,10 +1578,10 @@ next:
 		}
 
 		/* switch session */
-		session = f.file->private_data;
+		session = fd_file(f)->private_data;
 		msgs = get_task_msgs(session);
 
-		if (f.file->private_data == session)
+		if (fd_file(f)->private_data == session)
 			msgs->ext_fd = bat_msg.fd;
 
 		msgs->f = f;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2021 Rockchip Electronics Co., Ltd. */
 
+#include "omega4-media-compat.h"
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-common.h>
@@ -1463,7 +1464,7 @@ static int rkisp_init_vb2_queue(struct vb2_queue *q,
 	q->ops = &rkisp_vb2_ops;
 	q->mem_ops = stream->ispdev->hw_dev->mem_ops;
 	q->buf_struct_size = sizeof(struct rkisp_buffer);
-	q->min_buffers_needed = CIF_ISP_REQ_BUFS_MIN;
+	omega4_vb2_set_min_buffers(q, CIF_ISP_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &stream->apilock;
 	q->dev = stream->ispdev->hw_dev->dev;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2019 Fuzhou Rockchip Electronics Co., Ltd. */
 
+#include "omega4-media-compat.h"
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-common.h>
@@ -791,7 +792,7 @@ static int rkisp_init_vb2_queue(struct vb2_queue *q,
 	q->ops = &dmarx_vb2_ops;
 	q->mem_ops = stream->ispdev->hw_dev->mem_ops;
 	q->buf_struct_size = sizeof(struct rkisp_buffer);
-	q->min_buffers_needed = CIF_ISP_REQ_BUFS_MIN;
+	omega4_vb2_set_min_buffers(q, CIF_ISP_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	q->lock = &stream->apilock;
 	q->dev = stream->ispdev->hw_dev->dev;
@@ -979,7 +980,7 @@ static int rkisp_querycap(struct file *file, void *priv,
 	struct device *dev = stream->ispdev->dev;
 	struct video_device *vdev = video_devdata(file);
 
-	strlcpy(cap->card, vdev->name, sizeof(cap->card));
+	strscpy(cap->card, vdev->name, sizeof(cap->card));
 	snprintf(cap->driver, sizeof(cap->driver),
 		 "%s_v%d", dev->driver->name,
 		 stream->ispdev->isp_ver >> 4);
@@ -1158,25 +1159,25 @@ static int dmarx_init(struct rkisp_device *dev, u32 id)
 
 	switch (id) {
 	case RKISP_STREAM_DMARX:
-		strlcpy(vdev->name, DMA_VDEV_NAME,
+		strscpy(vdev->name, DMA_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp_dmarx_streams_ops;
 		stream->config = &rkisp_dmarx_stream_config;
 		break;
 	case RKISP_STREAM_RAWRD0:
-		strlcpy(vdev->name, DMARX0_VDEV_NAME,
+		strscpy(vdev->name, DMARX0_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmarx_streams_ops;
 		stream->config = &rkisp2_dmarx0_stream_config;
 		break;
 	case RKISP_STREAM_RAWRD1:
-		strlcpy(vdev->name, DMARX1_VDEV_NAME,
+		strscpy(vdev->name, DMARX1_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmarx_streams_ops;
 		stream->config = &rkisp2_dmarx1_stream_config;
 		break;
 	case RKISP_STREAM_RAWRD2:
-		strlcpy(vdev->name, DMARX2_VDEV_NAME,
+		strscpy(vdev->name, DMARX2_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmarx_streams_ops;
 		stream->config = &rkisp2_dmarx2_stream_config;

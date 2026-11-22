@@ -2458,7 +2458,7 @@ static int rkvenc2_free_rcbbuf(struct platform_device *pdev, struct rkvenc_dev *
 	return 0;
 }
 
-static int rkvenc_remove(struct platform_device *pdev)
+static void rkvenc_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
@@ -2489,7 +2489,7 @@ static int rkvenc_remove(struct platform_device *pdev)
 		rkvenc_procfs_remove(mpp);
 	}
 
-	return 0;
+	return;
 }
 
 static void rkvenc_shutdown(struct platform_device *pdev)
@@ -2502,7 +2502,7 @@ static void rkvenc_shutdown(struct platform_device *pdev)
 
 struct platform_driver rockchip_rkvenc2_driver = {
 	.probe = rkvenc_probe,
-	.remove = rkvenc_remove,
+	.remove_new = rkvenc_remove,
 	.shutdown = rkvenc_shutdown,
 	.driver = {
 		.name = RKVENC_DRIVER_NAME,

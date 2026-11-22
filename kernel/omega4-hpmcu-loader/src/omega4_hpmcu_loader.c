@@ -843,7 +843,7 @@ static int omega4_hpmcu_loader_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int omega4_hpmcu_loader_remove(struct platform_device *pdev)
+static void omega4_hpmcu_loader_remove(struct platform_device *pdev)
 {
 	struct omega4_hpmcu_loader *loader = platform_get_drvdata(pdev);
 
@@ -856,7 +856,7 @@ static int omega4_hpmcu_loader_remove(struct platform_device *pdev)
 		clk_bulk_disable_unprepare(loader->num_clks, loader->clks);
 
 	kfree(loader->fw_name_override);
-	return 0;
+	return;
 }
 
 static const struct of_device_id omega4_hpmcu_loader_of_match[] = {
@@ -867,7 +867,7 @@ MODULE_DEVICE_TABLE(of, omega4_hpmcu_loader_of_match);
 
 static struct platform_driver omega4_hpmcu_loader_driver = {
 	.probe = omega4_hpmcu_loader_probe,
-	.remove = omega4_hpmcu_loader_remove,
+	.remove_new = omega4_hpmcu_loader_remove,
 	.driver = {
 		.name = "omega4-hpmcu-loader",
 		.of_match_table = omega4_hpmcu_loader_of_match,

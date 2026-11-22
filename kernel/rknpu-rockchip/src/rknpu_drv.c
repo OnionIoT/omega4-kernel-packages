@@ -19,6 +19,7 @@
 #include <linux/platform_device.h>
 #include <linux/printk.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #include <linux/spinlock.h>
 #include <linux/time.h>
 #include <linux/uaccess.h>
@@ -1554,7 +1555,7 @@ err_remove_drv:
 	return ret;
 }
 
-static int rknpu_remove(struct platform_device *pdev)
+static void rknpu_remove(struct platform_device *pdev)
 {
 	struct rknpu_device *rknpu_dev = platform_get_drvdata(pdev);
 	int i = 0;
@@ -1615,7 +1616,7 @@ static int rknpu_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(&pdev->dev);
 
-	return 0;
+	return;
 }
 
 #ifndef FPGA_PLATFORM
@@ -1657,7 +1658,7 @@ static const struct dev_pm_ops rknpu_pm_ops = {
 
 static struct platform_driver rknpu_driver = {
 	.probe = rknpu_probe,
-	.remove = rknpu_remove,
+	.remove_new = rknpu_remove,
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "RKNPU",

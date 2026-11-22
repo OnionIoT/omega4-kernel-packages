@@ -32,6 +32,8 @@
  * SOFTWARE.
  */
 
+#include <linux/of_device.h>
+#include "omega4-media-compat.h"
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/io.h>
@@ -886,12 +888,19 @@ static int mipidphy_s_stream(struct v4l2_subdev *sd, int on)
 }
 
 static int mipidphy_g_frame_interval(struct v4l2_subdev *sd,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+			    struct v4l2_subdev_state *state,
+#endif
 				     struct v4l2_subdev_frame_interval *fi)
 {
 	struct v4l2_subdev *sensor = get_remote_sensor(sd);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	if (fi->which != V4L2_SUBDEV_FORMAT_ACTIVE)
+		return -EINVAL;
+#endif
 
 	if (sensor)
-		return v4l2_subdev_call(sensor, video, g_frame_interval, fi);
+		return omega4_subdev_get_frame_interval(sensor, fi);
 
 	return -EINVAL;
 }
@@ -996,6 +1005,9 @@ static int mipidphy_get_selection(struct v4l2_subdev *sd,
 }
 
 static const struct v4l2_subdev_pad_ops mipidphy_subdev_pad_ops = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval = mipidphy_g_frame_interval,
+#endif
 	.set_fmt = mipidphy_get_set_fmt,
 	.get_fmt = mipidphy_get_set_fmt,
 	.get_selection = mipidphy_get_selection,
@@ -1007,7 +1019,9 @@ static const struct v4l2_subdev_core_ops mipidphy_core_ops = {
 };
 
 static const struct v4l2_subdev_video_ops mipidphy_video_ops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval = mipidphy_g_frame_interval,
+#endif
 	.s_stream = mipidphy_s_stream,
 };
 
@@ -1881,7 +1895,7 @@ destroy_mutex:
 	return 0;
 }
 
-static int rockchip_mipidphy_remove(struct platform_device *pdev)
+static void rockchip_mipidphy_remove(struct platform_device *pdev)
 {
 	struct media_entity *me = platform_get_drvdata(pdev);
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(me);
@@ -1891,7 +1905,7 @@ static int rockchip_mipidphy_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(&pdev->dev);
 	mutex_destroy(&priv->mutex);
-	return 0;
+	return;
 }
 
 static const struct dev_pm_ops rockchip_mipidphy_pm_ops = {
@@ -1901,7 +1915,7 @@ static const struct dev_pm_ops rockchip_mipidphy_pm_ops = {
 
 static struct platform_driver rockchip_isp_mipidphy_driver = {
 	.probe = rockchip_mipidphy_probe,
-	.remove = rockchip_mipidphy_remove,
+	.remove_new = rockchip_mipidphy_remove,
 	.driver = {
 			.name = "rockchip-mipi-dphy-rx",
 			.pm = &rockchip_mipidphy_pm_ops,

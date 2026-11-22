@@ -16,6 +16,7 @@
 #include <linux/dma-buf.h>
 #include <linux/kfifo.h>
 #include <linux/types.h>
+#include <linux/version.h>
 #include <linux/time.h>
 #include <linux/workqueue.h>
 #include <linux/kthread.h>
@@ -809,7 +810,15 @@ static inline int mpp_pmu_idle_request(struct mpp_dev *mpp, bool idle)
 	if (mpp->skip_idle)
 		return 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	/* RV1103B has no encoder PM domain. The vendor-only idle helper is
+	 * unavailable in the upstream PM-domain driver; do not pretend to idle
+	 * domains on other SoCs.
+	 */
+	return -EOPNOTSUPP;
+#else
 	return rockchip_pmu_idle_request(mpp->dev, idle);
+#endif
 }
 
 static inline struct mpp_dev *

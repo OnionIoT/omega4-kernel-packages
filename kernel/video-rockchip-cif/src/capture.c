@@ -5,6 +5,7 @@
  * Copyright (C) 2018 Rockchip Electronics Co., Ltd.
  */
 
+#include "omega4-media-compat.h"
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
@@ -1913,10 +1914,7 @@ static void rkcif_rdbk_frame_end_toisp(struct rkcif_stream *stream,
 		}
 
 		if ((m_ts - l_ts) > time || (s_ts - m_ts) > time) {
-			ret = v4l2_subdev_call(sensor->sd,
-					       video,
-					       g_frame_interval,
-					       &sensor->fi);
+			ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 			if (!ret) {
 				denominator = sensor->fi.interval.denominator;
 				numerator = sensor->fi.interval.numerator;
@@ -1960,10 +1958,7 @@ static void rkcif_rdbk_frame_end_toisp(struct rkcif_stream *stream,
 		}
 
 		if ((s_ts - l_ts) > time) {
-			ret = v4l2_subdev_call(sensor->sd,
-					       video,
-					       g_frame_interval,
-					       &sensor->fi);
+			ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 			if (!ret) {
 				denominator = sensor->fi.interval.denominator;
 				numerator = sensor->fi.interval.numerator;
@@ -6941,8 +6936,7 @@ static int rkcif_sanity_check_fmt(struct rkcif_stream *stream,
 		}
 	}
 	if (atomic_read(&dev->pipe.stream_cnt) == 0)
-		v4l2_subdev_call(dev->terminal_sensor.sd, video,
-				 g_frame_interval, &dev->terminal_sensor.src_fi);
+		omega4_subdev_get_frame_interval(dev->terminal_sensor.sd, &dev->terminal_sensor.src_fi);
 
 	return 0;
 }
@@ -6989,8 +6983,7 @@ int rkcif_update_sensor_info(struct rkcif_stream *stream)
 				 __func__, terminal_sensor->sd->name);
 			return ret;
 		}
-		ret = v4l2_subdev_call(terminal_sensor->sd, video,
-				       g_frame_interval, &terminal_sensor->fi);
+		ret = omega4_subdev_get_frame_interval(terminal_sensor->sd, &terminal_sensor->fi);
 		if (ret) {
 			v4l2_err(&stream->cifdev->v4l2_dev,
 				 "%s: get terminal %s g_frame_interval failed!\n",
@@ -7804,8 +7797,7 @@ int rkcif_do_start_stream(struct rkcif_stream *stream, enum rkcif_stream_mode mo
 		else
 			dev->hdr.hdr_mode = NO_HDR;
 
-		ret = v4l2_subdev_call(terminal_sensor->sd,
-				       video, g_frame_interval, &terminal_sensor->fi);
+		ret = omega4_subdev_get_frame_interval(terminal_sensor->sd, &terminal_sensor->fi);
 		if (ret)
 			terminal_sensor->fi.interval = (struct v4l2_fract) {1, 30};
 
@@ -8036,9 +8028,9 @@ static int rkcif_init_vb2_queue(struct vb2_queue *q,
 	q->mem_ops = hw_dev->mem_ops;
 	q->buf_struct_size = sizeof(struct rkcif_buffer);
 	if (stream->cifdev->is_use_dummybuf)
-		q->min_buffers_needed = 1;
+		omega4_vb2_set_min_buffers(q, 1);
 	else
-		q->min_buffers_needed = CIF_REQ_BUFS_MIN;
+		omega4_vb2_set_min_buffers(q, CIF_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &stream->vnode.vlock;
 	q->dev = hw_dev->dev;
@@ -8108,8 +8100,7 @@ int rkcif_set_fmt(struct rkcif_stream *stream,
 
 		dev->terminal_sensor.raw_rect = input_rect;
 		if (atomic_read(&dev->pipe.stream_cnt) == 0) {
-			ret = v4l2_subdev_call(dev->terminal_sensor.sd, video,
-					       g_frame_interval, &dev->terminal_sensor.src_fi);
+			ret = omega4_subdev_get_frame_interval(dev->terminal_sensor.sd, &dev->terminal_sensor.src_fi);
 			if (ret) {
 				v4l2_err(&stream->cifdev->v4l2_dev,
 					 "%s: get terminal %s g_frame_interval failed!\n",
@@ -8462,7 +8453,7 @@ static int rkcif_enum_input(struct file *file, void *priv,
 		return -EINVAL;
 
 	input->type = V4L2_INPUT_TYPE_CAMERA;
-	strlcpy(input->name, "Camera", sizeof(input->name));
+	strscpy(input->name, "Camera", sizeof(input->name));
 
 	return 0;
 }
@@ -8537,7 +8528,7 @@ static int rkcif_enum_frameintervals(struct file *file, void *fh,
 		return -ENODEV;
 	}
 
-	ret = v4l2_subdev_call(sensor->sd, video, g_frame_interval, &fi);
+	ret = omega4_subdev_get_frame_interval(sensor->sd, &fi);
 	if (ret && ret != -ENOIOCTLCMD) {
 		return ret;
 	} else if (ret == -ENOIOCTLCMD) {
@@ -8654,8 +8645,8 @@ static int rkcif_querycap(struct file *file, void *priv,
 	struct rkcif_stream *stream = video_drvdata(file);
 	struct device *dev = stream->cifdev->dev;
 
-	strlcpy(cap->driver, dev->driver->name, sizeof(cap->driver));
-	strlcpy(cap->card, dev->driver->name, sizeof(cap->card));
+	strscpy(cap->driver, dev->driver->name, sizeof(cap->driver));
+	strscpy(cap->card, dev->driver->name, sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info),
 		 "platform:%s", dev_name(dev));
 
@@ -9671,7 +9662,7 @@ static int rkcif_register_stream_vdev(struct rkcif_stream *stream,
 		}
 	}
 
-	strlcpy(vdev->name, vdev_name, sizeof(vdev->name));
+	strscpy(vdev->name, vdev_name, sizeof(vdev->name));
 	node = vdev_to_node(vdev);
 	mutex_init(&node->vlock);
 
@@ -10677,10 +10668,7 @@ static void rkcif_rdbk_frame_end(struct rkcif_stream *stream)
 			}
 
 			if ((m_ts - l_ts) > time || (s_ts - m_ts) > time) {
-				ret = v4l2_subdev_call(sensor->sd,
-						       video,
-						       g_frame_interval,
-						       &sensor->fi);
+				ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 				if (!ret) {
 					denominator = sensor->fi.interval.denominator;
 					numerator = sensor->fi.interval.numerator;
@@ -10738,10 +10726,7 @@ static void rkcif_rdbk_frame_end(struct rkcif_stream *stream)
 			}
 
 			if ((s_ts - l_ts) > time) {
-				ret = v4l2_subdev_call(sensor->sd,
-						       video,
-						       g_frame_interval,
-						       &sensor->fi);
+				ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 				if (!ret) {
 					denominator = sensor->fi.interval.denominator;
 					numerator = sensor->fi.interval.numerator;

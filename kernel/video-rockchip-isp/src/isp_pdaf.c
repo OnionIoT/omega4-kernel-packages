@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2023 Rockchip Electronics Co., Ltd. */
 
+#include "omega4-media-compat.h"
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
 #include <media/videobuf2-core.h>
@@ -269,7 +270,7 @@ static int rkisp_pdaf_init_vb2_queue(struct vb2_queue *q, struct rkisp_pdaf_vdev
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &pdaf_vdev->api_lock;
 	q->dev = pdaf_vdev->dev->hw_dev->dev;
-	q->min_buffers_needed = 1;
+	omega4_vb2_set_min_buffers(q, 1);
 	q->allow_cache_hints = 1;
 	q->bidirectional = 1;
 	if (pdaf_vdev->dev->hw_dev->is_dma_contig)

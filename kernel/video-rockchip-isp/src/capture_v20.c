@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2020 Rockchip Electronics Co., Ltd. */
 
+#include "omega4-media-compat.h"
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-common.h>
@@ -1256,8 +1257,7 @@ static void rdbk_frame_end(struct rkisp_stream *stream)
 			s_ts = cap->rdbk_buf[RDBK_S]->vb.vb2_buf.timestamp;
 
 			if ((m_ts - l_ts) > time || (s_ts - m_ts) > time) {
-				ret = v4l2_subdev_call(sensor->sd,
-					video, g_frame_interval, &sensor->fi);
+				ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 				if (!ret) {
 					denominator = sensor->fi.interval.denominator;
 					numerator = sensor->fi.interval.numerator;
@@ -1295,8 +1295,7 @@ static void rdbk_frame_end(struct rkisp_stream *stream)
 			s_ts = cap->rdbk_buf[RDBK_S]->vb.vb2_buf.timestamp;
 
 			if ((s_ts - l_ts) > time) {
-				ret = v4l2_subdev_call(sensor->sd,
-					video, g_frame_interval, &sensor->fi);
+				ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 				if (!ret) {
 					denominator = sensor->fi.interval.denominator;
 					numerator = sensor->fi.interval.numerator;
@@ -1966,7 +1965,7 @@ static int rkisp_init_vb2_queue(struct vb2_queue *q,
 	q->ops = &rkisp_vb2_ops;
 	q->mem_ops = stream->ispdev->hw_dev->mem_ops;
 	q->buf_struct_size = sizeof(struct rkisp_buffer);
-	q->min_buffers_needed = CIF_ISP_REQ_BUFS_MIN;
+	omega4_vb2_set_min_buffers(q, CIF_ISP_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &stream->apilock;
 	q->dev = stream->ispdev->hw_dev->dev;
@@ -2002,7 +2001,7 @@ static int rkisp_stream_init(struct rkisp_device *dev, u32 id)
 
 	switch (id) {
 	case RKISP_STREAM_SP:
-		strlcpy(vdev->name, SP_VDEV_NAME,
+		strscpy(vdev->name, SP_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp_sp_streams_ops;
 		stream->config = &rkisp_sp_stream_config;
@@ -2010,31 +2009,31 @@ static int rkisp_stream_init(struct rkisp_device *dev, u32 id)
 		stream->config->fmt_size = ARRAY_SIZE(sp_fmts);
 		break;
 	case RKISP_STREAM_DMATX0:
-		strlcpy(vdev->name, DMATX0_VDEV_NAME,
+		strscpy(vdev->name, DMATX0_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmatx0_streams_ops;
 		stream->config = &rkisp2_dmatx0_stream_config;
 		break;
 	case RKISP_STREAM_DMATX1:
-		strlcpy(vdev->name, DMATX1_VDEV_NAME,
+		strscpy(vdev->name, DMATX1_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmatx1_streams_ops;
 		stream->config = &rkisp2_dmatx1_stream_config;
 		break;
 	case RKISP_STREAM_DMATX2:
-		strlcpy(vdev->name, DMATX2_VDEV_NAME,
+		strscpy(vdev->name, DMATX2_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmatx2_streams_ops;
 		stream->config = &rkisp2_dmatx2_stream_config;
 		break;
 	case RKISP_STREAM_DMATX3:
-		strlcpy(vdev->name, DMATX3_VDEV_NAME,
+		strscpy(vdev->name, DMATX3_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmatx3_streams_ops;
 		stream->config = &rkisp2_dmatx3_stream_config;
 		break;
 	default:
-		strlcpy(vdev->name, MP_VDEV_NAME,
+		strscpy(vdev->name, MP_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp_mp_streams_ops;
 		stream->config = &rkisp_mp_stream_config;

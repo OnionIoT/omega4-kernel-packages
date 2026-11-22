@@ -4,8 +4,11 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=video-sc3336
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
+
+PKG_FILE_DEPENDS += $(CURDIR)/../video-rockchip-isp/src/rkisp_tb_helper.h
+PKG_FILE_DEPENDS += $(CURDIR)/../omega4-media-compat.h
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -24,6 +27,8 @@ endef
 define Build/Prepare
 	$(INSTALL_DIR) $(PKG_BUILD_DIR)
 	$(CP) ./src/. $(PKG_BUILD_DIR)/
+	$(CP) ../omega4-media-compat.h $(PKG_BUILD_DIR)/
+	$(CP) ../video-rockchip-isp/src/rkisp_tb_helper.h $(PKG_BUILD_DIR)/
 endef
 
 define Build/Compile

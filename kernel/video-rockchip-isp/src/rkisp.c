@@ -32,6 +32,7 @@
  * SOFTWARE.
  */
 
+#include "omega4-media-compat.h"
 #include <linux/clk.h>
 #include <linux/compat.h>
 #include <linux/iopoll.h>
@@ -429,7 +430,7 @@ int rkisp_update_sensor_info(struct rkisp_device *dev)
 		}
 	}
 
-	v4l2_subdev_call(sensor->sd, video, g_frame_interval, &sensor->fi);
+	omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 	dev->active_sensor = sensor;
 	i = dev->dev_id;
 	if (sensor->fi.interval.numerator)

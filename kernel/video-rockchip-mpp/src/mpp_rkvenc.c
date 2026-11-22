@@ -1448,7 +1448,7 @@ failed_get_irq:
 	return ret;
 }
 
-static int rkvenc_remove(struct platform_device *pdev)
+static void rkvenc_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct mpp_dev *mpp = dev_get_drvdata(dev);
@@ -1457,12 +1457,12 @@ static int rkvenc_remove(struct platform_device *pdev)
 	mpp_dev_remove(mpp);
 	rkvenc_procfs_remove(mpp);
 
-	return 0;
+	return;
 }
 
 struct platform_driver rockchip_rkvenc_driver = {
 	.probe = rkvenc_probe,
-	.remove = rkvenc_remove,
+	.remove_new = rkvenc_remove,
 	.shutdown = mpp_dev_shutdown,
 	.driver = {
 		.name = RKVENC_DRIVER_NAME,

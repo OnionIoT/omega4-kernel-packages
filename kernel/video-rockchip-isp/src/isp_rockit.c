@@ -3,6 +3,7 @@
 
 #define pr_fmt(fmt) "isp_rockit: %s:%d " fmt, __func__, __LINE__
 
+#include "omega4-media-compat.h"
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <soc/rockchip/rockchip_rockit.h>
@@ -722,7 +723,7 @@ static bool rkisp_rockit_ctrl_fps(struct rkisp_stream *stream)
 
 	sensor = dev->active_sensor;
 
-	ret = v4l2_subdev_call(sensor->sd, video, g_frame_interval, &sensor->fi);
+	ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 	if (!ret) {
 		denominator = sensor->fi.interval.denominator;
 		numerator = sensor->fi.interval.numerator;

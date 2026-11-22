@@ -32,6 +32,7 @@
  * SOFTWARE.
  */
 
+#include "omega4-media-compat.h"
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-common.h>
@@ -1599,7 +1600,7 @@ static int rkisp_init_vb2_queue(struct vb2_queue *q,
 	q->ops = &rkisp1_vb2_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->buf_struct_size = sizeof(struct rkisp1_buffer);
-	q->min_buffers_needed = CIF_ISP_REQ_BUFS_MIN;
+	omega4_vb2_set_min_buffers(q, CIF_ISP_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &stream->ispdev->apilock;
 	q->dev = stream->ispdev->dev;
@@ -1832,7 +1833,7 @@ static int rkisp1_enum_input(struct file *file, void *priv,
 		return -EINVAL;
 
 	input->type = V4L2_INPUT_TYPE_CAMERA;
-	strlcpy(input->name, "Camera", sizeof(input->name));
+	strscpy(input->name, "Camera", sizeof(input->name));
 
 	return 0;
 }
@@ -1899,7 +1900,7 @@ static int rkisp_enum_frameintervals(struct file *file, void *fh,
 		return -ENODEV;
 	}
 
-	ret = v4l2_subdev_call(sensor->sd, video, g_frame_interval, &fi);
+	ret = omega4_subdev_get_frame_interval(sensor->sd, &fi);
 	if (ret && ret != -ENOIOCTLCMD) {
 		return ret;
 	} else if (ret == -ENOIOCTLCMD) {
@@ -2053,7 +2054,7 @@ static int rkisp1_querycap(struct file *file, void *priv,
 	struct device *dev = stream->ispdev->dev;
 	struct video_device *vdev = video_devdata(file);
 
-	strlcpy(cap->card, vdev->name, sizeof(cap->card));
+	strscpy(cap->card, vdev->name, sizeof(cap->card));
 	snprintf(cap->driver, sizeof(cap->driver),
 		 "%s_v%d", dev->driver->name,
 		 stream->ispdev->isp_ver >> 4);
@@ -2143,7 +2144,7 @@ static int rkisp1_register_stream_vdev(struct rkisp1_stream *stream)
 		v4l2_err(v4l2_dev, "Invalid stream\n");
 		return -EINVAL;
 	}
-	strlcpy(vdev->name, vdev_name, sizeof(vdev->name));
+	strscpy(vdev->name, vdev_name, sizeof(vdev->name));
 	node = vdev_to_node(vdev);
 
 	vdev->ioctl_ops = &rkisp1_v4l2_ioctl_ops;

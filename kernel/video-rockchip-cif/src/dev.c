@@ -2916,7 +2916,7 @@ int rkcif_plat_init(struct rkcif_device *cif_dev, struct device_node *node, int 
 	if (cif_dev->chip_id == CHIP_RV1106_CIF)
 		cif_dev->is_use_dummybuf = false;
 
-	strlcpy(cif_dev->media_dev.model, dev_name(dev),
+	strscpy(cif_dev->media_dev.model, dev_name(dev),
 		sizeof(cif_dev->media_dev.model));
 	cif_dev->csi_host_idx = of_alias_get_id(node, "rkcif_mipi_lvds");
 	if (cif_dev->csi_host_idx < 0 || cif_dev->csi_host_idx > 5)
@@ -2937,7 +2937,7 @@ int rkcif_plat_init(struct rkcif_device *cif_dev, struct device_node *node, int 
 	cif_dev->media_dev.dev = dev;
 	v4l2_dev = &cif_dev->v4l2_dev;
 	v4l2_dev->mdev = &cif_dev->media_dev;
-	strlcpy(v4l2_dev->name, dev_name(dev), sizeof(v4l2_dev->name));
+	strscpy(v4l2_dev->name, dev_name(dev), sizeof(v4l2_dev->name));
 
 	ret = v4l2_device_register(cif_dev->dev, &cif_dev->v4l2_dev);
 	if (ret < 0)
@@ -3144,7 +3144,7 @@ static int rkcif_plat_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int rkcif_plat_remove(struct platform_device *pdev)
+static void rkcif_plat_remove(struct platform_device *pdev)
 {
 	struct rkcif_device *cif_dev = platform_get_drvdata(pdev);
 
@@ -3154,7 +3154,7 @@ static int rkcif_plat_remove(struct platform_device *pdev)
 	sysfs_remove_group(&pdev->dev.kobj, &dev_attr_grp);
 	del_timer_sync(&cif_dev->reset_watchdog_timer.timer);
 
-	return 0;
+	return;
 }
 
 static int __maybe_unused rkcif_sleep_suspend(struct device *dev)
@@ -3256,7 +3256,7 @@ struct platform_driver rkcif_plat_drv = {
 		.pm = &rkcif_plat_pm_ops,
 	},
 	.probe = rkcif_plat_probe,
-	.remove = rkcif_plat_remove,
+	.remove_new = rkcif_plat_remove,
 };
 EXPORT_SYMBOL(rkcif_plat_drv);
 

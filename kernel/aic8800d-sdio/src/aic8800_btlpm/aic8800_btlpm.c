@@ -941,7 +941,7 @@ err0:
 	return ret;
 }
 
-static int bluesleep_remove(struct platform_device *pdev)
+static void bluesleep_remove(struct platform_device *pdev)
 {
 	/* assert bt wake */
 	gpio_set_value(bsi->ext_wake, bsi->ext_wake_assert);
@@ -971,7 +971,7 @@ static int bluesleep_remove(struct platform_device *pdev)
 #else
 	BT_ERR("%s kernel unsupport this feature!\r\n", __func__);
 #endif
-	return 0;
+	return;
 }
 
 #ifdef CONFIG_AUTO_PM
@@ -998,7 +998,7 @@ static const struct of_device_id sunxi_btlpm_ids[] = {
 };
 
 static struct platform_driver bluesleep_driver = {
-	.remove             = bluesleep_remove,
+	.remove_new             = bluesleep_remove,
 #ifdef CONFIG_AUTO_PM
 	.suspend            = bluesleep_suspend,
 	.resume             = bluesleep_resume,

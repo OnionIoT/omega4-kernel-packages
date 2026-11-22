@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2019 Fuzhou Rockchip Electronics Co., Ltd. */
 
+#include "omega4-media-compat.h"
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-common.h>
@@ -388,7 +389,7 @@ static int rkisp_init_vb2_queue(struct vb2_queue *q,
 	q->ops = &dmarx_vb2_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->buf_struct_size = sizeof(struct rkisp1_buffer);
-	q->min_buffers_needed = CIF_ISP_REQ_BUFS_MIN;
+	omega4_vb2_set_min_buffers(q, CIF_ISP_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &stream->ispdev->apilock;
 
@@ -539,7 +540,7 @@ static int rkisp1_querycap(struct file *file, void *priv,
 	struct device *dev = stream->ispdev->dev;
 	struct video_device *vdev = video_devdata(file);
 
-	strlcpy(cap->card, vdev->name, sizeof(cap->card));
+	strscpy(cap->card, vdev->name, sizeof(cap->card));
 	snprintf(cap->driver, sizeof(cap->driver),
 		 "%s_v%d", dev->driver->name,
 		 stream->ispdev->isp_ver >> 4);
@@ -659,7 +660,7 @@ int rkisp1_register_dmarx_vdev(struct rkisp1_device *dev)
 		stream->ops = &rkisp1_dmarx_streams_ops;
 		stream->config = &rkisp1_dmarx_stream_config;
 		vdev = &stream->vnode.vdev;
-		strlcpy(vdev->name, DMA_VDEV_NAME, sizeof(vdev->name));
+		strscpy(vdev->name, DMA_VDEV_NAME, sizeof(vdev->name));
 		ret = rkisp1_register_dmarx_video(stream);
 		if (ret < 0)
 			return ret;

@@ -1369,7 +1369,7 @@ static int rkisp_hw_probe(struct platform_device *pdev)
 	if (!ret && clk_rate)
 		hw_dev->is_assigned_clk = true;
 
-	hw_dev->reset = devm_reset_control_array_get(dev, false, false);
+	hw_dev->reset = devm_reset_control_array_get_exclusive(dev);
 	if (IS_ERR(hw_dev->reset)) {
 		dev_dbg(dev, "failed to get reset\n");
 		hw_dev->reset = NULL;
@@ -1433,14 +1433,14 @@ err:
 	return ret;
 }
 
-static int rkisp_hw_remove(struct platform_device *pdev)
+static void rkisp_hw_remove(struct platform_device *pdev)
 {
 	struct rkisp_hw_dev *hw_dev = platform_get_drvdata(pdev);
 
 	rkisp_put_sram(hw_dev);
 	pm_runtime_disable(&pdev->dev);
 	mutex_destroy(&hw_dev->dev_lock);
-	return 0;
+	return;
 }
 
 static void rkisp_hw_shutdown(struct platform_device *pdev)
@@ -1587,7 +1587,7 @@ static struct platform_driver rkisp_hw_drv = {
 		.pm = &rkisp_hw_pm_ops,
 	},
 	.probe = rkisp_hw_probe,
-	.remove = rkisp_hw_remove,
+	.remove_new = rkisp_hw_remove,
 	.shutdown = rkisp_hw_shutdown,
 };
 

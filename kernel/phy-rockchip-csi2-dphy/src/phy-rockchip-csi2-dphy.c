@@ -5,11 +5,13 @@
  * Copyright (C) 2021 Rockchip Electronics Co., Ltd.
  */
 
+#include "omega4-media-compat.h"
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/of_graph.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
@@ -669,12 +671,19 @@ static int csi2_dphy_s_stream(struct v4l2_subdev *sd, int on)
 }
 
 static int csi2_dphy_g_frame_interval(struct v4l2_subdev *sd,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+			    struct v4l2_subdev_state *state,
+#endif
 					    struct v4l2_subdev_frame_interval *fi)
 {
 	struct v4l2_subdev *sensor = get_remote_sensor(sd);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	if (fi->which != V4L2_SUBDEV_FORMAT_ACTIVE)
+		return -EINVAL;
+#endif
 
 	if (sensor)
-		return v4l2_subdev_call(sensor, video, g_frame_interval, fi);
+		return omega4_subdev_get_frame_interval(sensor, fi);
 
 	return -EINVAL;
 }
@@ -833,11 +842,16 @@ static const struct v4l2_subdev_core_ops csi2_dphy_core_ops = {
 };
 
 static const struct v4l2_subdev_video_ops csi2_dphy_video_ops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval = csi2_dphy_g_frame_interval,
+#endif
 	.s_stream = csi2_dphy_s_stream,
 };
 
 static const struct v4l2_subdev_pad_ops csi2_dphy_subdev_pad_ops = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval = csi2_dphy_g_frame_interval,
+#endif
 	.set_fmt = csi2_dphy_get_set_fmt,
 	.get_fmt = csi2_dphy_get_set_fmt,
 	.get_selection = csi2_dphy_get_selection,
@@ -1228,7 +1242,7 @@ detach_hw:
 	return -EINVAL;
 }
 
-static int rockchip_csi2_dphy_remove(struct platform_device *pdev)
+static void rockchip_csi2_dphy_remove(struct platform_device *pdev)
 {
 	struct media_entity *me = platform_get_drvdata(pdev);
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(me);
@@ -1241,7 +1255,7 @@ static int rockchip_csi2_dphy_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(&pdev->dev);
 	mutex_destroy(&dphy->mutex);
-	return 0;
+	return;
 }
 
 static const struct dev_pm_ops rockchip_csi2_dphy_pm_ops = {
@@ -1251,7 +1265,7 @@ static const struct dev_pm_ops rockchip_csi2_dphy_pm_ops = {
 
 struct platform_driver rockchip_csi2_dphy_driver = {
 	.probe = rockchip_csi2_dphy_probe,
-	.remove = rockchip_csi2_dphy_remove,
+	.remove_new = rockchip_csi2_dphy_remove,
 	.driver = {
 		.name = "rockchip-csi2-dphy",
 		.pm = &rockchip_csi2_dphy_pm_ops,

@@ -1703,7 +1703,7 @@ static int rkcif_plat_hw_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int rkcif_plat_remove(struct platform_device *pdev)
+static void rkcif_plat_remove(struct platform_device *pdev)
 {
 	struct rkcif_hw *cif_hw = platform_get_drvdata(pdev);
 
@@ -1717,7 +1717,7 @@ static int rkcif_plat_remove(struct platform_device *pdev)
 
 	rkcif_csi2_unregister_notifier(&cif_hw->reset_notifier);
 
-	return 0;
+	return;
 }
 
 static void rkcif_hw_shutdown(struct platform_device *pdev)
@@ -1835,7 +1835,7 @@ static struct platform_driver rkcif_hw_plat_drv = {
 		.pm = &rkcif_plat_pm_ops,
 	},
 	.probe = rkcif_plat_hw_probe,
-	.remove = rkcif_plat_remove,
+	.remove_new = rkcif_plat_remove,
 	.shutdown = rkcif_hw_shutdown,
 };
 

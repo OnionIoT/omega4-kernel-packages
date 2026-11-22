@@ -32,6 +32,7 @@
  * SOFTWARE.
  */
 
+#include "omega4-media-compat.h"
 #include <linux/clk.h>
 #include <linux/iopoll.h>
 #include <linux/pm_runtime.h>

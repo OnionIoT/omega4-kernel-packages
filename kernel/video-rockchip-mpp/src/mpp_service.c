@@ -483,7 +483,7 @@ fail_register:
 	return ret;
 }
 
-static int mpp_service_remove(struct platform_device *pdev)
+static void mpp_service_remove(struct platform_device *pdev)
 {
 	struct mpp_taskqueue *queue;
 	struct device *dev = &pdev->dev;
@@ -509,7 +509,7 @@ static int mpp_service_remove(struct platform_device *pdev)
 	class_destroy(srv->cls);
 	mpp_procfs_remove(srv);
 
-	return 0;
+	return;
 }
 
 static const struct of_device_id mpp_dt_ids[] = {
@@ -521,7 +521,7 @@ static const struct of_device_id mpp_dt_ids[] = {
 
 static struct platform_driver mpp_service_driver = {
 	.probe = mpp_service_probe,
-	.remove = mpp_service_remove,
+	.remove_new = mpp_service_remove,
 	.driver = {
 		.name = "mpp_service",
 		.of_match_table = of_match_ptr(mpp_dt_ids),

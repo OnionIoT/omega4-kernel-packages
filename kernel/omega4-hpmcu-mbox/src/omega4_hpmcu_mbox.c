@@ -348,13 +348,13 @@ static int omega4_hpmcu_mbox_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int omega4_hpmcu_mbox_remove(struct platform_device *pdev)
+static void omega4_hpmcu_mbox_remove(struct platform_device *pdev)
 {
 	struct omega4_hpmcu_mbox *mb = platform_get_drvdata(pdev);
 
 	sysfs_remove_group(&pdev->dev.kobj, &omega4_hpmcu_attr_group);
 	mbox_free_channel(mb->chan);
-	return 0;
+	return;
 }
 
 static const struct of_device_id omega4_hpmcu_mbox_of_match[] = {
@@ -365,7 +365,7 @@ MODULE_DEVICE_TABLE(of, omega4_hpmcu_mbox_of_match);
 
 static struct platform_driver omega4_hpmcu_mbox_driver = {
 	.probe = omega4_hpmcu_mbox_probe,
-	.remove = omega4_hpmcu_mbox_remove,
+	.remove_new = omega4_hpmcu_mbox_remove,
 	.driver = {
 		.name = "omega4-hpmcu-mailbox",
 		.of_match_table = omega4_hpmcu_mbox_of_match,

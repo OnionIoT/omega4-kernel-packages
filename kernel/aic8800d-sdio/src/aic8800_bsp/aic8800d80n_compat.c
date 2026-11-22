@@ -1,3 +1,4 @@
+#include <linux/vmalloc.h>
 #include "aic8800d80n_compat.h"
 #include "aic_bsp_export.h"
 

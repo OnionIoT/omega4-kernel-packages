@@ -4,6 +4,7 @@
  * Author: Felix Zeng <felix.zeng@rock-chips.com>
  */
 
+#include <linux/vmalloc.h>
 #include <drm/drm_device.h>
 #include <drm/drm_vma_manager.h>
 #include <drm/drm_prime.h>

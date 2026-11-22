@@ -4,15 +4,17 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=video-rockchip-cif
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
+
+PKG_FILE_DEPENDS += $(CURDIR)/../omega4-media-compat.h
 
 include $(INCLUDE_DIR)/package.mk
 
 define KernelPackage/video-rockchip-cif
   SUBMENU:=Video Support
   TITLE:=Rockchip CIF video capture support
-  DEPENDS:=@TARGET_rockchip +kmod-video-core +kmod-video-fwnode +kmod-phy-rockchip-csi2-dphy +kmod-video-rockchip-mipi-csi2
+  DEPENDS:=@TARGET_rockchip +kmod-video-core +kmod-video-dma-contig +kmod-video-fwnode +kmod-phy-rockchip-csi2-dphy +kmod-video-rockchip-mipi-csi2
   FILES:=$(PKG_BUILD_DIR)/video_rkcif.ko
   AUTOLOAD:=$(call AutoLoad,40,video_rkcif)
 endef
@@ -24,6 +26,7 @@ endef
 define Build/Prepare
 	$(INSTALL_DIR) $(PKG_BUILD_DIR)
 	$(CP) ./src/. $(PKG_BUILD_DIR)/
+	$(CP) ../omega4-media-compat.h $(PKG_BUILD_DIR)/
 endef
 
 define Build/Compile

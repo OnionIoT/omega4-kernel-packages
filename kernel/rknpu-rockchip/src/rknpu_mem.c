@@ -5,6 +5,7 @@
  */
 
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 #include <linux/rk-dma-heap.h>
 
 #if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE

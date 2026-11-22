@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2020 Rockchip Electronics Co., Ltd.
  */
+#include "omega4-media-compat.h"
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
@@ -128,18 +129,25 @@ static void sditf_get_hdr_mode(struct sditf_priv *priv)
 }
 
 static int sditf_g_frame_interval(struct v4l2_subdev *sd,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+			    struct v4l2_subdev_state *state,
+#endif
 				  struct v4l2_subdev_frame_interval *fi)
 {
 	struct sditf_priv *priv = to_sditf_priv(sd);
 	struct rkcif_device *cif_dev = priv->cif_dev;
 	struct v4l2_subdev *sensor_sd;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	if (fi->which != V4L2_SUBDEV_FORMAT_ACTIVE)
+		return -EINVAL;
+#endif
 
 	if (!cif_dev->terminal_sensor.sd)
 		rkcif_update_sensor_info(&cif_dev->stream[0]);
 
 	if (cif_dev->terminal_sensor.sd) {
 		sensor_sd = cif_dev->terminal_sensor.sd;
-		return v4l2_subdev_call(sensor_sd, video, g_frame_interval, fi);
+		return omega4_subdev_get_frame_interval(sensor_sd, fi);
 	}
 
 	return -EINVAL;
@@ -448,10 +456,10 @@ static void sditf_select_sensor_setting_for_thunderboot(struct sditf_priv *priv)
 			fmt.format.width = width;
 			fmt.format.height = height;
 			v4l2_subdev_call(dev->terminal_sensor.sd, pad, set_fmt, NULL, &fmt);
-			v4l2_subdev_call(dev->terminal_sensor.sd, video, g_frame_interval, &fi);
+			omega4_subdev_get_frame_interval(dev->terminal_sensor.sd, &fi);
 			fi.interval.numerator = 1;
 			fi.interval.denominator = max_fps;
-			v4l2_subdev_call(dev->terminal_sensor.sd, video, s_frame_interval, &fi);
+			omega4_subdev_set_frame_interval(dev->terminal_sensor.sd, &fi);
 			v4l2_subdev_call(dev->terminal_sensor.sd,
 					 core, ioctl,
 					 RKMODULE_GET_HDR_CFG,
@@ -1447,6 +1455,9 @@ static int sditf_s_rx_buffer(struct v4l2_subdev *sd,
 }
 
 static const struct v4l2_subdev_pad_ops sditf_subdev_pad_ops = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval = sditf_g_frame_interval,
+#endif
 	.set_fmt = sditf_get_set_fmt,
 	.get_fmt = sditf_get_set_fmt,
 	.get_selection = sditf_get_selection,
@@ -1454,7 +1465,9 @@ static const struct v4l2_subdev_pad_ops sditf_subdev_pad_ops = {
 };
 
 static const struct v4l2_subdev_video_ops sditf_video_ops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval = sditf_g_frame_interval,
+#endif
 	.s_stream = sditf_s_stream,
 	.s_rx_buffer = sditf_s_rx_buffer,
 };
@@ -1804,7 +1817,7 @@ static int rkcif_subdev_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int rkcif_subdev_remove(struct platform_device *pdev)
+static void rkcif_subdev_remove(struct platform_device *pdev)
 {
 	struct media_entity *me = platform_get_drvdata(pdev);
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(me);
@@ -1812,7 +1825,7 @@ static int rkcif_subdev_remove(struct platform_device *pdev)
 	media_entity_cleanup(&sd->entity);
 
 	pm_runtime_disable(&pdev->dev);
-	return 0;
+	return;
 }
 
 static const struct of_device_id rkcif_subdev_match_id[] = {
@@ -1825,7 +1838,7 @@ MODULE_DEVICE_TABLE(of, rkcif_subdev_match_id);
 
 struct platform_driver rkcif_subdev_driver = {
 	.probe = rkcif_subdev_probe,
-	.remove = rkcif_subdev_remove,
+	.remove_new = rkcif_subdev_remove,
 	.driver = {
 		.name = "rkcif_sditf",
 		.of_match_table = rkcif_subdev_match_id,

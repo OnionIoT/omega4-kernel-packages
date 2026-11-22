@@ -10,6 +10,7 @@
  ******************************************************************************
  */
 
+#include <linux/vmalloc.h>
 #include <linux/netdevice.h>
 #include <linux/ctype.h>
 #include "rwnx_defs.h"

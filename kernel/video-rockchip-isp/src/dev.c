@@ -951,7 +951,7 @@ static int rkisp_plat_probe(struct platform_device *pdev)
 
 	v4l2_dev = &isp_dev->v4l2_dev;
 	v4l2_dev->mdev = &isp_dev->media_dev;
-	strlcpy(v4l2_dev->name, isp_dev->name, sizeof(v4l2_dev->name));
+	strscpy(v4l2_dev->name, isp_dev->name, sizeof(v4l2_dev->name));
 	v4l2_ctrl_handler_init(&isp_dev->ctrl_handler, 5);
 	v4l2_dev->ctrl_handler = &isp_dev->ctrl_handler;
 
@@ -993,7 +993,7 @@ err_unreg_v4l2_dev:
 	return ret;
 }
 
-static int rkisp_plat_remove(struct platform_device *pdev)
+static void rkisp_plat_remove(struct platform_device *pdev)
 {
 	struct rkisp_device *isp_dev = platform_get_drvdata(pdev);
 
@@ -1018,7 +1018,7 @@ static int rkisp_plat_remove(struct platform_device *pdev)
 	rkisp_unregister_csi_subdev(isp_dev);
 	rkisp_unregister_isp_subdev(isp_dev);
 	media_device_cleanup(&isp_dev->media_dev);
-	return 0;
+	return;
 }
 
 static int __maybe_unused rkisp_runtime_suspend(struct device *dev)
@@ -1287,7 +1287,7 @@ struct platform_driver rkisp_plat_drv = {
 		   .pm = &rkisp_plat_pm_ops,
 	},
 	.probe = rkisp_plat_probe,
-	.remove = rkisp_plat_remove,
+	.remove_new = rkisp_plat_remove,
 };
 
 MODULE_AUTHOR("Rockchip Camera/ISP team");

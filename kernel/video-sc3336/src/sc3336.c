@@ -8,6 +8,7 @@
  */
 
 //#define DEBUG
+#include "omega4-media-compat.h"
 #include <linux/clk.h>
 #include <linux/device.h>
 #include <linux/delay.h>
@@ -830,10 +831,17 @@ static int sc3336_enable_test_pattern(struct sc3336 *sc3336, u32 pattern)
 }
 
 static int sc3336_g_frame_interval(struct v4l2_subdev *sd,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+			    struct v4l2_subdev_state *state,
+#endif
 				    struct v4l2_subdev_frame_interval *fi)
 {
 	struct sc3336 *sc3336 = to_sc3336(sd);
 	const struct sc3336_mode *mode = sc3336->cur_mode;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	if (fi->which != V4L2_SUBDEV_FORMAT_ACTIVE)
+		return -EINVAL;
+#endif
 
 	if (sc3336->streaming)
 		fi->interval = sc3336->cur_fps;
@@ -866,6 +874,9 @@ static const struct sc3336_mode *sc3336_find_mode(struct sc3336 *sc3336, int fps
 }
 
 static int sc3336_s_frame_interval(struct v4l2_subdev *sd,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+			    struct v4l2_subdev_state *state,
+#endif
 				   struct v4l2_subdev_frame_interval *fi)
 {
 	struct sc3336 *sc3336 = to_sc3336(sd);
@@ -874,6 +885,10 @@ static int sc3336_s_frame_interval(struct v4l2_subdev *sd,
 	s64 h_blank, vblank_def;
 	u64 pixel_rate = 0;
 	int fps;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	if (fi->which != V4L2_SUBDEV_FORMAT_ACTIVE)
+		return -EINVAL;
+#endif
 
 	if (sc3336->streaming)
 		return -EBUSY;
@@ -1428,11 +1443,21 @@ static const struct v4l2_subdev_core_ops sc3336_core_ops = {
 
 static const struct v4l2_subdev_video_ops sc3336_video_ops = {
 	.s_stream = sc3336_s_stream,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.g_frame_interval = sc3336_g_frame_interval,
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 8, 0)
 	.s_frame_interval = sc3336_s_frame_interval,
+#endif
 };
 
 static const struct v4l2_subdev_pad_ops sc3336_pad_ops = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.set_frame_interval = sc3336_s_frame_interval,
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
+	.get_frame_interval = sc3336_g_frame_interval,
+#endif
 	.enum_mbus_code = sc3336_enum_mbus_code,
 	.enum_frame_size = sc3336_enum_frame_sizes,
 	.enum_frame_interval = sc3336_enum_frame_interval,

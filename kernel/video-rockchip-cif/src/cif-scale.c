@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2020 Rockchip Electronics Co., Ltd. */
 
+#include "omega4-media-compat.h"
 #include <linux/kfifo.h>
 #include <media/v4l2-common.h>
 #include <media/v4l2-ioctl.h>
@@ -465,7 +466,7 @@ static int rkcif_scale_enum_frameintervals(struct file *file, void *fh,
 		return -ENODEV;
 	}
 
-	ret = v4l2_subdev_call(sensor->sd, video, g_frame_interval, &fi);
+	ret = omega4_subdev_get_frame_interval(sensor->sd, &fi);
 	if (ret && ret != -ENOIOCTLCMD) {
 		return ret;
 	} else if (ret == -ENOIOCTLCMD) {
@@ -1111,7 +1112,7 @@ static int rkcif_scale_init_vb2_queue(struct vb2_queue *q,
 	q->ops = &rkcif_scale_vb2_ops;
 	q->mem_ops = hw_dev->mem_ops;
 	q->buf_struct_size = sizeof(struct rkcif_buffer);
-	q->min_buffers_needed = CIF_SCALE_REQ_BUFS_MIN;
+	omega4_vb2_set_min_buffers(q, CIF_SCALE_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &scale_vdev->vnode.vlock;
 	q->dev = hw_dev->dev;

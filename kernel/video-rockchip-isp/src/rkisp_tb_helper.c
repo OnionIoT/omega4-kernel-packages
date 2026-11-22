@@ -243,9 +243,9 @@ static int rkisp_tb_plat_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int rkisp_tb_plat_remove(struct platform_device *pdev)
+static void rkisp_tb_plat_remove(struct platform_device *pdev)
 {
-	return 0;
+	return;
 }
 
 static struct platform_driver __maybe_unused rkisp_tb_plat_drv = {
@@ -255,7 +255,7 @@ static struct platform_driver __maybe_unused rkisp_tb_plat_drv = {
 		.pm = &rkisp_tb_plat_pm_ops,
 	},
 	.probe = rkisp_tb_plat_probe,
-	.remove = rkisp_tb_plat_remove,
+	.remove_new = rkisp_tb_plat_remove,
 };
 
 static int __init rkisp_tb_plat_drv_init(void)

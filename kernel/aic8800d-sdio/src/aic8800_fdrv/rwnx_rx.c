@@ -2429,7 +2429,11 @@ check_len_update:
 #ifdef CONFIG_GKI
 			rwnx_cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, GFP_ATOMIC);
 #else
-            cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2, GFP_ATOMIC);
+            cfg80211_rx_spurious_frame(rwnx_vif->ndev, hdr->addr2,
+#if CFG80211_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+                                      -1,
+#endif
+                                      GFP_ATOMIC);
 #endif
 		}
 		goto end;
@@ -2805,7 +2809,11 @@ check_len_update:
 													   sta->mac_addr, GFP_ATOMIC);
 #else
                     cfg80211_rx_unexpected_4addr_frame(rwnx_vif->ndev,
-                                                       sta->mac_addr, GFP_ATOMIC);
+                                                       sta->mac_addr,
+#if CFG80211_VERSION_CODE >= KERNEL_VERSION(6, 17, 0)
+                                                       -1,
+#endif
+                                                       GFP_ATOMIC);
 #endif
 				}
 			}

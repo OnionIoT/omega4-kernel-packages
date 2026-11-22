@@ -10,6 +10,7 @@
  ******************************************************************************
  */
 
+#include <linux/vmalloc.h>
 #include "rwnx_msg_tx.h"
 #include "rwnx_mod_params.h"
 #include "reg_access.h"

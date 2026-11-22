@@ -5,6 +5,7 @@
  * Copyright (C) 2019 Rockchip Electronics Co., Ltd.
  */
 
+#include "omega4-media-compat.h"
 #include <linux/clk.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
@@ -1270,7 +1271,7 @@ rmmutex:
 	return ret;
 }
 
-static int csi2_remove(struct platform_device *pdev)
+static void csi2_remove(struct platform_device *pdev)
 {
 	struct v4l2_subdev *sd = platform_get_drvdata(pdev);
 	struct csi2_dev *csi2 = sd_to_dev(sd);
@@ -1279,7 +1280,7 @@ static int csi2_remove(struct platform_device *pdev)
 	mutex_destroy(&csi2->lock);
 	media_entity_cleanup(&sd->entity);
 
-	return 0;
+	return;
 }
 
 static struct platform_driver csi2_driver = {
@@ -1288,7 +1289,7 @@ static struct platform_driver csi2_driver = {
 		.of_match_table = csi2_dt_ids,
 	},
 	.probe = csi2_probe,
-	.remove = csi2_remove,
+	.remove_new = csi2_remove,
 };
 
 int rkcif_csi2_plat_drv_init(void)
@@ -1468,9 +1469,9 @@ static int csi2_hw_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int csi2_hw_remove(struct platform_device *pdev)
+static void csi2_hw_remove(struct platform_device *pdev)
 {
-	return 0;
+	return;
 }
 
 static struct platform_driver csi2_hw_driver = {
@@ -1479,7 +1480,7 @@ static struct platform_driver csi2_hw_driver = {
 		.of_match_table = csi2_hw_ids,
 	},
 	.probe = csi2_hw_probe,
-	.remove = csi2_hw_remove,
+	.remove_new = csi2_hw_remove,
 };
 
 int rkcif_csi2_hw_plat_drv_init(void)

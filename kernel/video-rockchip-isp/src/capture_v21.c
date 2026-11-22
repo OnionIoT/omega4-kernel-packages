@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2020 Rockchip Electronics Co., Ltd. */
 
+#include "omega4-media-compat.h"
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-common.h>
@@ -1146,8 +1147,7 @@ static void rdbk_frame_end(struct rkisp_stream *stream)
 		s_ts = cap->rdbk_buf[RDBK_S]->vb.vb2_buf.timestamp;
 
 		if ((s_ts - l_ts) > time) {
-			ret = v4l2_subdev_call(sensor->sd,
-				video, g_frame_interval, &sensor->fi);
+			ret = omega4_subdev_get_frame_interval(sensor->sd, &sensor->fi);
 			if (!ret) {
 				denominator = sensor->fi.interval.denominator;
 				numerator = sensor->fi.interval.numerator;
@@ -1822,7 +1822,7 @@ static int rkisp_init_vb2_queue(struct vb2_queue *q,
 	q->ops = &rkisp_vb2_ops;
 	q->mem_ops = stream->ispdev->hw_dev->mem_ops;
 	q->buf_struct_size = sizeof(struct rkisp_buffer);
-	q->min_buffers_needed = CIF_ISP_REQ_BUFS_MIN;
+	omega4_vb2_set_min_buffers(q, CIF_ISP_REQ_BUFS_MIN);
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &stream->apilock;
 	q->dev = stream->ispdev->hw_dev->dev;
