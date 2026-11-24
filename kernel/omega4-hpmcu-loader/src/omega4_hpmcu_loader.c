@@ -766,6 +766,21 @@ static int omega4_hpmcu_loader_probe(struct platform_device *pdev)
 			return PTR_ERR(loader->reset);
 	}
 
+	/*
+	 * The core may be out of reset with the default DDR mapping.
+	 * Hold it before ungating clocks: firmware lookup can sleep, and the
+	 * image and address translations are not installed until start_locked.
+	 */
+	if (loader->reset_core)
+		ret = reset_control_assert(loader->reset_core);
+	else if (loader->reset)
+		ret = reset_control_assert(loader->reset);
+	else
+		return dev_err_probe(&pdev->dev, -EINVAL,
+				     "core reset is required before enabling HPMCU clocks\n");
+	if (ret)
+		return dev_err_probe(&pdev->dev, ret, "failed to hold HPMCU in reset\n");
+
 	loader->num_clks = devm_clk_bulk_get_all(&pdev->dev, &loader->clks);
 	if (loader->num_clks < 0)
 		return loader->num_clks;
@@ -859,6 +874,15 @@ static void omega4_hpmcu_loader_remove(struct platform_device *pdev)
 	return;
 }
 
+static void omega4_hpmcu_loader_shutdown(struct platform_device *pdev)
+{
+	struct omega4_hpmcu_loader *loader = platform_get_drvdata(pdev);
+
+	mutex_lock(&loader->lock);
+	omega4_hpmcu_stop_locked(loader);
+	mutex_unlock(&loader->lock);
+}
+
 static const struct of_device_id omega4_hpmcu_loader_of_match[] = {
 	{ .compatible = "onion,omega4-hpmcu-loader" },
 	{ }
@@ -868,6 +892,7 @@ MODULE_DEVICE_TABLE(of, omega4_hpmcu_loader_of_match);
 static struct platform_driver omega4_hpmcu_loader_driver = {
 	.probe = omega4_hpmcu_loader_probe,
 	.remove_new = omega4_hpmcu_loader_remove,
+	.shutdown = omega4_hpmcu_loader_shutdown,
 	.driver = {
 		.name = "omega4-hpmcu-loader",
 		.of_match_table = omega4_hpmcu_loader_of_match,
