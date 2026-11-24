@@ -185,7 +185,7 @@ int rkisp_align_sensor_resolution(struct rkisp_device *dev,
 				  struct v4l2_rect *crop, bool user)
 {
 	struct v4l2_subdev *sensor = NULL;
-	struct v4l2_subdev_selection sel;
+	struct v4l2_subdev_selection sel = {0};
 	u32 code = dev->isp_sdev.in_frm.code;
 	u32 src_w = dev->isp_sdev.in_frm.width;
 	u32 src_h = dev->isp_sdev.in_frm.height;

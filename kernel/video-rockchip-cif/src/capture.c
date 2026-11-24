@@ -984,7 +984,7 @@ const struct
 cif_input_fmt *rkcif_get_input_fmt(struct rkcif_device *dev, struct v4l2_rect *rect,
 			     u32 pad_id, struct csi_channel_info *csi_info)
 {
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_format fmt = {0};
 	struct v4l2_subdev *sd = dev->terminal_sensor.sd;
 	struct rkmodule_channel_info ch_info = {0};
 	struct rkmodule_capture_info capture_info;
@@ -5988,8 +5988,8 @@ static int rkcif_create_dummy_buf(struct rkcif_stream *stream)
 	struct rkcif_hw *hw = dev->hw_dev;
 	struct rkcif_dummy_buffer *dummy_buf = &hw->dummy_buf;
 	struct rkcif_device *tmp_dev = NULL;
-	struct v4l2_subdev_frame_interval_enum fie;
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_frame_interval_enum fie = {0};
+	struct v4l2_subdev_format fmt = {0};
 	u32 max_size = 0;
 	u32 size = 0;
 	int ret = 0;
@@ -6830,7 +6830,7 @@ static u32 rkcif_cal_raw_vir_line_ratio(struct rkcif_stream *stream,
 static void rkcif_sync_crop_info(struct rkcif_stream *stream)
 {
 	struct rkcif_device *dev = stream->cifdev;
-	struct v4l2_subdev_selection input_sel;
+	struct v4l2_subdev_selection input_sel = {0};
 	int ret;
 
 	if (dev->terminal_sensor.sd) {
@@ -8516,7 +8516,7 @@ static int rkcif_enum_frameintervals(struct file *file, void *fh,
 	struct rkcif_stream *stream = video_drvdata(file);
 	struct rkcif_device *dev = stream->cifdev;
 	struct rkcif_sensor_info *sensor = dev->active_sensor;
-	struct v4l2_subdev_frame_interval fi;
+	struct v4l2_subdev_frame_interval fi = {0};
 	int ret;
 
 	if (fival->index != 0)
@@ -8686,7 +8686,7 @@ static int rkcif_s_selection(struct file *file, void *fh,
 	struct rkcif_stream *stream = video_drvdata(file);
 	struct rkcif_device *dev = stream->cifdev;
 	struct v4l2_subdev *sensor_sd;
-	struct v4l2_subdev_selection sd_sel;
+	struct v4l2_subdev_selection sd_sel = {0};
 	const struct v4l2_rect *rect = &s->r;
 	struct v4l2_rect sensor_crop;
 	struct v4l2_rect *raw_rect = &dev->terminal_sensor.raw_rect;
@@ -8775,7 +8775,7 @@ static int rkcif_g_selection(struct file *file, void *fh,
 	struct rkcif_stream *stream = video_drvdata(file);
 	struct rkcif_device *dev = stream->cifdev;
 	struct v4l2_subdev *sensor_sd;
-	struct v4l2_subdev_selection sd_sel;
+	struct v4l2_subdev_selection sd_sel = {0};
 	u16 pad = 0;
 	int ret = 0;
 
@@ -9829,7 +9829,7 @@ static int rkcif_lvds_sd_get_selection(struct v4l2_subdev *sd,
 {
 	struct rkcif_lvds_subdev *subdev = container_of(sd, struct rkcif_lvds_subdev, sd);
 	struct v4l2_subdev *sensor = get_lvds_remote_sensor(sd);
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_format fmt = {0};
 	int ret = 0;
 
 	if (!sel) {
@@ -12256,9 +12256,9 @@ u32 rkcif_mbus_pixelcode_to_v4l2(u32 pixelcode)
 
 void rkcif_set_default_fmt(struct rkcif_device *cif_dev)
 {
-	struct v4l2_subdev_selection input_sel;
+	struct v4l2_subdev_selection input_sel = {0};
 	struct v4l2_pix_format_mplane pixm;
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_format fmt = {0};
 	int stream_num = 0;
 	int ret, i;
 

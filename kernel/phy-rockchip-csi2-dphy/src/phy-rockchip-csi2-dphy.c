@@ -950,7 +950,6 @@ static int rockchip_csi2_dphy_fwnode_parse(struct csi2_dphy *dphy)
 	struct v4l2_fwnode_endpoint vep = {
 		.bus_type = V4L2_MBUS_CSI2_DPHY
 	};
-	struct device *remote_dev = NULL;
 	int ret;
 
 	fwnode_graph_for_each_endpoint(dev_fwnode(dev), ep) {
@@ -970,17 +969,10 @@ static int rockchip_csi2_dphy_fwnode_parse(struct csi2_dphy *dphy)
 			continue;
 		}
 
-		/* check sensor register state on i2c/spi bus for gki*/
-		if (!IS_ENABLED(CONFIG_NO_GKI)) {
-			remote_dev = bus_find_device_by_fwnode(&i2c_bus_type, remote_ep);
-			if (!remote_dev || !remote_dev->driver) {
-				remote_dev = bus_find_device_by_fwnode(&spi_bus_type, remote_ep);
-				if (!remote_dev || !remote_dev->driver) {
-					fwnode_handle_put(remote_ep);
-					continue;
-				}
-			}
-		}
+		/* Register the connection even when the sensor driver has not probed.
+		 * The async notifier must wait for it, rather than completing an
+		 * empty pipeline permanently when modules load in a different order.
+		 */
 
 		fwnode_handle_put(remote_ep);
 
@@ -1033,19 +1025,24 @@ static int rockchip_csi2dphy_media_init(struct csi2_dphy *dphy)
 
 	ret = rockchip_csi2_dphy_fwnode_parse(dphy);
 	if (ret)
-		return ret;
+		goto cleanup_notifier;
 
-	dphy->sd.subdev_notifier = &dphy->notifier;
 	dphy->notifier.ops = &rockchip_csi2_dphy_async_ops;
 	ret = v4l2_async_nf_register(&dphy->notifier);
 	if (ret) {
 		dev_err(dphy->dev,
 			"failed to register async notifier : %d\n", ret);
-		v4l2_async_nf_cleanup(&dphy->notifier);
-		return ret;
+		goto cleanup_notifier;
 	}
 
-	return v4l2_async_register_subdev(&dphy->sd);
+	ret = v4l2_async_register_subdev(&dphy->sd);
+	if (!ret)
+		return 0;
+	v4l2_async_nf_unregister(&dphy->notifier);
+cleanup_notifier:
+	v4l2_async_nf_cleanup(&dphy->notifier);
+	media_entity_cleanup(&dphy->sd.entity);
+	return ret;
 }
 
 static struct dphy_drv_data rk3568_dphy_drv_data = {
@@ -1248,6 +1245,10 @@ static void rockchip_csi2_dphy_remove(struct platform_device *pdev)
 	struct v4l2_subdev *sd = media_entity_to_v4l2_subdev(me);
 	struct csi2_dphy *dphy = to_csi2_dphy(sd);
 	int i = 0;
+
+	v4l2_async_nf_unregister(&dphy->notifier);
+	v4l2_async_nf_cleanup(&dphy->notifier);
+	v4l2_async_unregister_subdev(sd);
 
 	for (i = 0; i < dphy->csi_info.csi_num; i++)
 		rockchip_csi2_dphy_detach_hw(dphy, dphy->csi_info.csi_idx[i], i);

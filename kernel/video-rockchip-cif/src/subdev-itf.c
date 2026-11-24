@@ -177,7 +177,7 @@ static int sditf_get_set_fmt(struct v4l2_subdev *sd,
 {
 	struct sditf_priv *priv = to_sditf_priv(sd);
 	struct rkcif_device *cif_dev = priv->cif_dev;
-	struct v4l2_subdev_selection input_sel;
+	struct v4l2_subdev_selection input_sel = {0};
 	struct v4l2_pix_format_mplane pixm;
 	const struct cif_output_fmt *out_fmt;
 	int ret = -EINVAL;
@@ -405,7 +405,7 @@ static void sditf_reinit_mode(struct sditf_priv *priv, struct rkisp_vicap_mode *
 static void sditf_select_sensor_setting_for_thunderboot(struct sditf_priv *priv)
 {
 	struct rkcif_device *dev = priv->cif_dev;
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_format fmt = {0};
 	struct rk_sensor_setting sensor_setting = {0};
 	struct v4l2_subdev_frame_interval fi = {0};
 	struct rkmodule_hdr_cfg hdr_cfg;
@@ -479,7 +479,7 @@ static long sditf_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	struct sditf_priv *priv = to_sditf_priv(sd);
 	struct rkisp_vicap_mode *mode;
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_format fmt = {0};
 	struct rkcif_device *cif_dev = priv->cif_dev;
 	struct v4l2_subdev *sensor_sd;
 	struct rkcif_exp *exp;
@@ -1137,7 +1137,7 @@ static void sditf_enable_immediately(struct sditf_priv *priv)
 static int sditf_start_stream(struct sditf_priv *priv)
 {
 	struct rkcif_device *cif_dev = priv->cif_dev;
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_format fmt = {0};
 	unsigned int mode = RKCIF_STREAM_MODE_TOISP;
 	int stream_cnt = 0;
 	int i = 0;

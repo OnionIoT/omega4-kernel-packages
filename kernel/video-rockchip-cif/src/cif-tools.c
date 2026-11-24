@@ -249,7 +249,7 @@ static int rkcif_tools_enum_frameintervals(struct file *file, void *fh,
 	struct rkcif_tools_vdev *tools_vdev = video_drvdata(file);
 	struct rkcif_device *dev = tools_vdev->cifdev;
 	struct rkcif_sensor_info *sensor = &dev->terminal_sensor;
-	struct v4l2_subdev_frame_interval fi;
+	struct v4l2_subdev_frame_interval fi = {0};
 	int ret;
 
 	if (fival->index != 0)

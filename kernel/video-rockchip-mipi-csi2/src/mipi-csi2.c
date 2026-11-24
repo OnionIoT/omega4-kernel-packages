@@ -473,7 +473,7 @@ static int csi2_get_selection(struct v4l2_subdev *sd,
 {
 	struct csi2_dev *csi2 = sd_to_dev(sd);
 	struct v4l2_subdev *sensor = get_remote_sensor(sd);
-	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_format fmt = {0};
 	int ret = 0;
 
 	if (!sel) {

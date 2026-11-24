@@ -265,8 +265,8 @@ static int rkcif_scale_set_fmt(struct rkcif_scale_vdev *scale_vdev,
 {
 	struct rkcif_stream *stream = scale_vdev->stream;
 	struct rkcif_device *cif_dev = scale_vdev->cifdev;
-	struct v4l2_subdev_selection input_sel;
-	struct v4l2_subdev_format fmt_src;
+	struct v4l2_subdev_selection input_sel = {0};
+	struct v4l2_subdev_format fmt_src = {0};
 	const struct cif_output_fmt *fmt;
 	unsigned int imagesize = 0;
 	int bpl, size, bpp;
@@ -454,7 +454,7 @@ static int rkcif_scale_enum_frameintervals(struct file *file, void *fh,
 	struct rkcif_scale_vdev *scale_vdev = video_drvdata(file);
 	struct rkcif_device *dev = scale_vdev->cifdev;
 	struct rkcif_sensor_info *sensor = &dev->terminal_sensor;
-	struct v4l2_subdev_frame_interval fi;
+	struct v4l2_subdev_frame_interval fi = {0};
 	int ret;
 
 	if (fival->index != 0)

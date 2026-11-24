@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=video-rockchip-mipi-csi2
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/$(PKG_NAME)
 
 PKG_FILE_DEPENDS += $(CURDIR)/../omega4-media-compat.h

@@ -1482,7 +1482,7 @@ static int rkisp_enum_frameintervals(struct file *file, void *fh,
 	const struct rkisp_stream *stream = video_drvdata(file);
 	struct rkisp_device *dev = stream->ispdev;
 	struct rkisp_sensor_info *sensor = dev->active_sensor;
-	struct v4l2_subdev_frame_interval fi;
+	struct v4l2_subdev_frame_interval fi = {0};
 	int ret;
 
 	if (fival->index != 0)

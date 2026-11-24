@@ -491,8 +491,8 @@ static int rkisp_create_links(struct rkisp_device *dev)
 static int _set_pipeline_default_fmt(struct rkisp_device *dev, bool is_init)
 {
 	struct v4l2_subdev *isp;
-	struct v4l2_subdev_format fmt;
-	struct v4l2_subdev_selection sel;
+	struct v4l2_subdev_format fmt = {0};
+	struct v4l2_subdev_selection sel = {0};
 	u32 width, height, code;
 
 	memset(&sel, 0, sizeof(sel));
