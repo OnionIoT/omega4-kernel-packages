@@ -28,6 +28,9 @@ def main():
     args = parser.parse_args()
     build = args.build.resolve()
     uboot = build / "u-boot"
+    config = (uboot / ".config").read_text().splitlines()
+    if "CONFIG_ROCKCHIP_META=y" in config:
+        raise ValueError("SDK meta fast-boot must be disabled for OpenWrt")
     merger = build / "rkbin/tools/boot_merger"
     output = build / "images"
     verify = build / "verify"
@@ -74,6 +77,8 @@ def main():
         f"{sha256(path)}  {name}\n" for name, path in sorted(source.items())))
     (output / "build-info.json").write_text(json.dumps({
         "package": "omega4p-boot",
+        "package_release": 3,
+        "sdk_meta_enabled": False,
         "board": "onion,rv1106b-omega4p-evb",
         "sdk_commit": REVISION,
         "vendor_inputs": BLOBS,

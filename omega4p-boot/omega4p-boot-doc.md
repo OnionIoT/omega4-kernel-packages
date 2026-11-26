@@ -125,3 +125,32 @@ images match the previous v0.0.15 release bytes exactly. The Omega4+ environment
 was written, read back in full and used to boot the previously blank board to
 OpenWrt 0.0.15 with a writable UBIFS overlay. The newly repacked boot binaries
 were host-verified; original Omega4 hardware validation remains deferred.
+
+## SDK metadata isolation (package release 3)
+
+OpenWrt does not generate meta.img. Older package revisions nevertheless enabled
+CONFIG_ROCKCHIP_META in SPL. A retained valid SDK meta partition caused the
+bootloader to load camera metadata and notify its vendor RT-Thread HPMCU, before
+the Linux HPMCU loader could assert reset or establish its reserved DDR mapping.
+This path assumes the SDK memory layout, not the OpenWrt memory layout.
+
+On 26 November, adding the SDK meta image to an otherwise working A29C with the
+exact v0.0.18 IDBlock/kernel/rootfs reproduced the factory cgroup_attach_task
+panic at +0x8a, reading 0x111. In failsafe, physical 0x64440..0x6445f contained
+32 ASCII '#' bytes over the kernel function entry. The vendor RT-Thread source
+uses '#' to fill thread stacks; the specific writing instruction was not traced.
+The pre-Linux HPMCU mapping was zero, boot address 0x40000 and core reset
+deasserted. Linux's later MCU reservation at 0x01000000 cannot protect against
+this earlier SDK path.
+
+Release 3 disables CONFIG_ROCKCHIP_META and rejects builds that enable it.
+Metadata remains on flash but is not loaded, appended to boot arguments or used
+to notify the vendor MCU. The board's normal Linux camera and MCU firmware remain
+available. The original Omega4 boot configuration does not enable this option.
+
+**Existing boards need the corrected idblock.img written to the IDBlock
+partition. Sysupgrade preserves IDBlock and therefore cannot install this fix.**
+Preserve env, meta and user data. A full reflash or factory reset is unnecessary.
+Use the matching Omega4+ USB helper and verify IDBlock readback before reboot.
+Evidence and validation: ../hardware-validation/2026-11-26-meta-panic in the
+parent development workspace (outside this repository).
