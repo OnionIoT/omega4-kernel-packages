@@ -61,6 +61,9 @@ def main():
     shutil.rmtree(verify, ignore_errors=True)
     verify.mkdir()
     env_source = Path(__file__).resolve().parent.parent / "files/uboot.env"
+    expected_layout = "mtdparts=spi1.0:256K(env),1M@256K(idblock),1M(uboot),8M(boot),251136K(ubi)"
+    if [line for line in env_source.read_text().splitlines() if line.startswith("mtdparts=")] != [expected_layout]:
+        raise ValueError("Omega4 environment must bound UBI to the 255.5 MiB loader endpoint")
     env_image = build / "env.img"
     subprocess.run([str(uboot / "tools/mkenvimage"), "-s", "0x40000", "-p", "0x0",
                     "-o", str(env_image), str(env_source)], check=True)
@@ -104,6 +107,9 @@ def main():
         f"{sha256(path)}  {name}\n" for name, path in sorted(source.items())))
     (output / "build-info.json").write_text(json.dumps({
         "package": "omega4-boot",
+        "package_release": 3,
+        "ubi_offset": 0x00a40000,
+        "ubi_capacity": 0x0f540000,
         "board": "onion,rv1103b-omega4-evb",
         "sdk_commit": REVISION,
         "vendor_inputs": BLOBS,

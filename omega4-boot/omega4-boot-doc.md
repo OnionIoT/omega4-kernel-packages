@@ -63,9 +63,9 @@ The existing original Omega4 OpenWrt layout stays unchanged:
 | idblock | 0x40000 | 0x100000 |
 | uboot | 0x140000 | 0x100000 |
 | boot | 0x240000 | 0x800000 |
-| ubi | 0xa40000 | Remaining NAND |
+| ubi | 0xa40000 | 0xf540000 (245.25 MiB) |
 
-This package does not create or overwrite env, kernel or rootfs. Normal
+This package creates a default env.img but does not write it to hardware or create kernel/rootfs images. Normal
 sysupgrade continues to preserve the installed bootloader. Original Omega4
 and Omega4+ boot packages are not interchangeable.
 
@@ -107,3 +107,23 @@ images match the previous v0.0.15 release bytes exactly. The Omega4+ environment
 was written, read back in full and used to boot the previously blank board to
 OpenWrt 0.0.15 with a writable UBIFS overlay. The newly repacked boot binaries
 were host-verified; original Omega4 hardware validation remains deferred.
+
+## UBI boundary correction (package release 3)
+
+Use `251136K(ubi)` in mtdparts, not `-(ubi)`. U-Boot passes this environment
+map to Linux, overriding the fixed device-tree map. Both must end at
+0x0ff80000 (255.5 MiB). Updating boot.img alone leaves an existing unbounded
+environment in effect. Normal sysupgrade preserves that environment too.
+
+For initial provisioning, flash the corrected default env.img. For an already
+provisioned board, back up its full 256 KiB environment and run:
+
+```sh
+python3 scripts/fix-env-ubi.py env-backup.img env-fixed.img
+```
+
+The tool validates CRC and the original Omega4 layout, changes only mtdparts,
+preserves all other environment entries (including ethaddr), and refuses to
+overwrite an existing output file. Write env-fixed.img to the environment
+partition with the appropriate board flashing tool. Keep the original backup.
+Do not substitute the default env.img if the existing MAC must be preserved.
